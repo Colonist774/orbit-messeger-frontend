@@ -1,7 +1,7 @@
 import {
-  useEffect,
   useRef,
   useState,
+  useLayoutEffect
 } from "react";
 import Message from "./Message"
 
@@ -12,14 +12,14 @@ function ChatWindow({     //принимаем:
 }) {
 
   const [text, setText] = useState("")      //для приема данных из input
-
+  const isSendingRef = useRef(false)
   const messagesEndRef = useRef(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [chat?.messages]);
+      behavior: "auto",
+    })
+  }, [chat?.id, chat?.messages.length])
 
 
   //меняем состояниие text
@@ -28,22 +28,37 @@ function ChatWindow({     //принимаем:
   }
 
   //отправка сообщений
-  async function sendMessage(event) {     
-    event.preventDefault()                    //отключаем обновление старницы
+  async function sendMessage(event) {
+    event.preventDefault()
 
-    const preparedText = text.trim()          //лишие убираем пробелы с переданного состояния text
+    const preparedText = text.trim()
 
-    if (preparedText === "") {                //если text - пустая строка, ничего не меняем, новое сообщение не добавляем
+    if (
+      preparedText === "" ||
+      isSendingRef.current
+    ) {
       return
     }
 
-    onSendMessage(chat.id, preparedText)      
+    isSendingRef.current = true
     setText("")
-    await onSendMessage(                      //вызываем переданную функцию - добавляем новое сообщение в базу данных, передаем id текущего чата и текст сообщения
+
+    try {
+      await onSendMessage(
         chat.id,
         preparedText
-    );
-    setText("");                              //очищаем состояние text, чтобы очистить input после отправки сообщения
+      )
+    } catch (error) {
+      console.error(
+        "Ошибка отправки сообщения:",
+        error
+      )
+
+      // Возвращаем текст, если отправка провалилась
+      setText(preparedText)
+    } finally {
+      isSendingRef.current = false
+    }
   }
 
   if (!chat) {      //если чат не выбран и переменная chat имеет значение 0, выводим "Выберите чат"

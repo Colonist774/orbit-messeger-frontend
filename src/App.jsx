@@ -236,20 +236,54 @@ function App() {
   }
 
   async function handleSendMessage(chatId, text) {
+    const temporaryId = `temporary-${Date.now()}`
+
+    const temporaryMessage = {
+      id: temporaryId,
+      author: currentUser.username,
+      text,
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      isOwn: true,
+      isSending: true,
+    }
+
+    // Сразу показываем сообщение
+    setChats((previousChats) =>
+      previousChats.map((chat) => {
+        if (chat.id !== chatId) {
+          return chat
+        }
+
+        return {
+          ...chat,
+          lastMessage: text,
+          time: temporaryMessage.time,
+          messages: [
+            ...chat.messages,
+            temporaryMessage,
+          ],
+        }
+      })
+    )
+
     try {
-      setAppError("");
+      setAppError("")
 
       const backendMessage =
         await sendMessageRequest(
           token,
           chatId,
           text
-        );
+        )
 
+      // Заменяем временное сообщение настоящим
       setChats((previousChats) =>
         previousChats.map((chat) => {
           if (chat.id !== chatId) {
-            return chat;
+            return chat
           }
 
           const preparedMessage =
@@ -257,22 +291,42 @@ function App() {
               backendMessage,
               currentUser,
               chat
-            );
+            )
 
           return {
             ...chat,
             lastMessage: preparedMessage.text,
             time: preparedMessage.time,
-            messages: chat.messages.some(
-              (message) => message.id === preparedMessage.id
-            )
-              ? chat.messages
-              : [...chat.messages, preparedMessage],
-          };
+            messages: chat.messages.map(
+              (message) =>
+                message.id === temporaryId
+                  ? preparedMessage
+                  : message
+            ),
+          }
         })
-      );
+      )
     } catch (error) {
-      setAppError(error.message);
+      // Если сервер не сохранил сообщение — удаляем временное
+      setChats((previousChats) =>
+        previousChats.map((chat) => {
+          if (chat.id !== chatId) {
+            return chat
+          }
+
+          return {
+            ...chat,
+            messages: chat.messages.filter(
+              (message) =>
+                message.id !== temporaryId
+            ),
+          }
+        })
+      )
+
+      setAppError(error.message)
+
+      throw error
     }
   }
 
