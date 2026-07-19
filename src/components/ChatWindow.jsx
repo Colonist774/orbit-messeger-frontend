@@ -1,4 +1,8 @@
-import { useState } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import Message from "./Message"
 
 function ChatWindow({     //принимаем:
@@ -9,13 +13,22 @@ function ChatWindow({     //принимаем:
 
   const [text, setText] = useState("")      //для приема данных из input
 
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [chat?.messages]);
+
+
   //меняем состояниие text
   function handleChange(event) {      
     setText(event.target.value)       //используем setter, присваиваем значение text из input
   }
 
   //отправка сообщений
-  function sendMessage(event) {     
+  async function sendMessage(event) {     
     event.preventDefault()                    //отключаем обновление старницы
 
     const preparedText = text.trim()          //лишие убираем пробелы с переданного состояния text
@@ -24,8 +37,13 @@ function ChatWindow({     //принимаем:
       return
     }
 
-    onSendMessage(chat.id, preparedText)      //вызываем переданную функцию - добавляем новое сообщение в массив сообщений
+    onSendMessage(chat.id, preparedText)      
     setText("")
+    await onSendMessage(                      //вызываем переданную функцию - добавляем новое сообщение в базу данных, передаем id текущего чата и текст сообщения
+        chat.id,
+        preparedText
+    );
+    setText("");                              //очищаем состояние text, чтобы очистить input после отправки сообщения
   }
 
   if (!chat) {      //если чат не выбран и переменная chat имеет значение 0, выводим "Выберите чат"
@@ -82,6 +100,7 @@ function ChatWindow({     //принимаем:
             />
           ))
         )}
+        <div ref={messagesEndRef} />
       </section>
 
       <form className="message-form" onSubmit={sendMessage}>
