@@ -144,6 +144,12 @@ function App() {
   const [isMobileChatOpen, setIsMobileChatOpen] =
     useState(false);
 
+  const selectedChat = chats.find(
+    (chat) => chat.id === selectedChatId
+  );
+
+  const selectedChatName =
+    selectedChat?.name ?? "";
 
   useEffect(() => {
     if (!token) {
@@ -518,10 +524,6 @@ function App() {
     currentUser,
     cryptoKeys,
   ]);
-
-  const selectedChat = chats.find(
-    (chat) => chat.id === selectedChatId
-  );
 
   const shouldShowMessagesLoading =
     selectedChatId !== null &&
