@@ -325,6 +325,52 @@ function App() {
     cryptoPassword,
   ]);
 
+  // Загрузка списка чатов пользователя.
+  useEffect(() => {
+    if (!token || !currentUser) {
+      setChats([]);
+      setSelectedChatId(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadChats() {
+      try {
+        setIsLoadingChats(true);
+        setAppError("");
+
+        const response = await getChats(token);
+
+        const backendChats = Array.isArray(response)
+          ? response
+          : response.chats ?? [];
+
+        const preparedChats =
+          backendChats.map(convertBackendChat);
+
+        if (!isCancelled) {
+          setChats(preparedChats);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setChats([]);
+          setAppError(error.message);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingChats(false);
+        }
+      }
+    }
+
+    loadChats();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [token, currentUser]);
+
   // Загрузка и расшифровка истории сообщений.
   useEffect(() => {
     if (
