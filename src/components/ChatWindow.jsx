@@ -7,6 +7,7 @@ import Message from "./Message"
 
 function ChatWindow({     //принимаем:
   chat,                         //Выбранный чат (состояние)
+  onBack,                       //возврат к списку чатов на мобильном
   onSendMessage,                //функцию - отправка сообщений
   onDeleteMessage,              //функцию - удаление сообщений
 }) {
@@ -72,6 +73,16 @@ function ChatWindow({     //принимаем:
   return (
     <main className="chat-window">
       <header className="chat-header">
+        <button
+          className="mobile-back-button"
+          type="button"
+          onClick={onBack}
+          aria-label="Вернуться к списку чатов"
+          title="Назад"
+        >
+          ←
+        </button>
+
         <div className="avatar">
           {chat.name[0]}
         </div>
@@ -103,14 +114,21 @@ function ChatWindow({     //принимаем:
           </p>
         ) : (                                   //если сообщения есть:
           chat.messages.map((message) => (          //передаем значения каждого элемента - сообщения из текущего чата чата    
-            <Message                                //рендерим сообщения
+            <Message
               key={message.id}
               author={message.author}
               text={message.text}
               time={message.time}
               isOwn={message.isOwn}
-              onDelete={() =>                       //передаем функцию - удаление сообщений
-                onDeleteMessage(chat.id, message.id)
+              canDelete={
+                message.isOwn &&
+                !message.isSending
+              }
+              onDelete={() =>
+                onDeleteMessage(
+                  chat.id,
+                  message.id
+                )
               }
             />
           ))
@@ -124,9 +142,12 @@ function ChatWindow({     //принимаем:
         </button>
         
         <input                        //ввод текста сообщения
+          type="text"
           value={text}                //добавляем один источник текста - состояние text, input всегда отображает значение из text
           onChange={handleChange}     //При изменение значения в input, передаем его в функцию для изменения text
           placeholder="Напишите сообщение..."
+          autoComplete="off"
+          enterKeyHint="send"
         />
 
         <button

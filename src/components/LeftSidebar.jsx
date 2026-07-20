@@ -66,6 +66,7 @@ function LeftSidebar({
         </div>
 
         <button
+          className="logout-button"
           type="button"
           onClick={onLogout}
           aria-label="Выйти из аккаунта"
@@ -132,12 +133,13 @@ function LeftSidebar({
             </p>
           ) : (
             chats.map((chat) => (
-              <article
+              <button
                 className={`chat-item ${
                   selectedChatId === chat.id
                     ? "chat-item--active"
                     : ""
                 }`}
+                type="button"
                 key={chat.id}
                 onClick={() =>
                   onSelectChat(chat.id)
@@ -153,7 +155,7 @@ function LeftSidebar({
                 </div>
 
                 <time>{chat.time}</time>
-              </article>
+              </button>
             ))
           )}
         </div>

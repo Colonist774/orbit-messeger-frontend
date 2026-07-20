@@ -1,25 +1,53 @@
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "";
 
-export async function uploadPublicKey(token, publicKey) {
-    const response = await fetch(`${API_URL}/api/keys/me`, {
-        method: "PUT",
-        headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            public_key: publicKey,
-            algorithm: "RSA-OAEP-2048",
-        }),
-    });
+async function readError(response) {
+  const data = await response.json().catch(() => null);
 
-    if (!response.ok) {
-        const error = await response.json().catch(() => null);
+  return data?.detail || "Ошибка запроса";
+}
 
-        throw new Error(
-            error?.detail ?? "Не удалось сохранить публичный ключ"
-        );
+export async function uploadPublicKey(
+  token,
+  publicKey
+) {
+  const response = await fetch(
+    `${API_URL}/api/keys/me`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        public_key: publicKey,
+        algorithm: "RSA-OAEP-2048",
+      }),
     }
+  );
 
-    return response.json();
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json();
+}
+
+export async function getUserPublicKey(
+  token,
+  userId
+) {
+  const response = await fetch(
+    `${API_URL}/api/keys/users/${userId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json();
 }

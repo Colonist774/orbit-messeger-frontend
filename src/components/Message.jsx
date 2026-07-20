@@ -1,8 +1,18 @@
-function Message({ author, text, time, isOwn, onDelete }) { //получаем значения
+function Message({
+  author,
+  text,
+  time,
+  isOwn,
+  canDelete,
+  onDelete,
+}) {
   return (
-    //если сообщение принадлежит пользователю (isOwn = true) даем className 'message--own'
-    <article className={`message ${isOwn ? "message--own" : ""}`}>
-      {!isOwn && (      //если сообщение собеседника (isOwn = false) добавляем имя собеседника
+    <article
+      className={`message ${
+        isOwn ? "message--own" : ""
+      }`}
+    >
+      {!isOwn && (
         <span className="message__author">
           {author}
         </span>
@@ -13,20 +23,24 @@ function Message({ author, text, time, isOwn, onDelete }) { //получаем �
       </p>
 
       <footer className="message__footer">
-        <button
-          className="message__delete"
-          type="button"
-          onClick={onDelete}
-          aria-label="Удалить сообщение"
-        > Delete
-        </button>
+        {canDelete && (
+          <button
+            className="message__delete"
+            type="button"
+            onClick={onDelete}
+            aria-label="Удалить сообщение"
+            title="Удалить сообщение"
+          >
+            Delete
+          </button>
+        )}
 
         {isOwn && <span>✓✓</span>}
 
         <time>{time}</time>
       </footer>
     </article>
-  )
+  );
 }
 
-export default Message
+export default Message;

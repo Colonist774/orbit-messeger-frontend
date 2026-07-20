@@ -1,4 +1,4 @@
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "";
 
 async function readError(response) {
   const data = await response.json().catch(() => null);
@@ -26,7 +26,7 @@ export async function getMessages(token, chatId) {
 export async function sendMessage(
   token,
   chatId,
-  text
+  encryptedMessage
 ) {
   const response = await fetch(
     `${API_URL}/api/chats/${chatId}/messages`,
@@ -36,11 +36,7 @@ export async function sendMessage(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        ciphertext: text,
-        iv: "plaintext-mvp",
-        key_version: 1,
-      }),
+      body: JSON.stringify(encryptedMessage),
     }
   );
 
@@ -49,4 +45,25 @@ export async function sendMessage(
   }
 
   return response.json();
+}
+
+
+export async function deleteMessage(
+  token,
+  chatId,
+  messageId
+) {
+  const response = await fetch(
+    `${API_URL}/api/chats/${chatId}/messages/${messageId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
 }

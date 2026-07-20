@@ -1,6 +1,7 @@
 .app {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
   overflow: hidden;
@@ -8,11 +9,18 @@
   background: #08080b;
 }
 
+.chat-pane {
+  min-width: 0;
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* Левая панель */
 
 .sidebar {
   min-width: 0;
   height: 100vh;
+  height: 100dvh;
   padding: 18px;
   overflow-y: auto;
   background: #0e0e13;
@@ -75,11 +83,16 @@
 }
 
 .chat-item {
+  width: 100%;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 12px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
   border-radius: 10px;
   cursor: pointer;
 }
@@ -113,6 +126,7 @@
 .chat-window {
   min-width: 0;
   height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   background:
@@ -121,6 +135,7 @@
 }
 
 .chat-header {
+  min-width: 0;
   padding: 16px 22px;
   background: rgba(14, 14, 19, 0.95);
   border-bottom: 1px solid #24242d;
@@ -132,6 +147,24 @@
   gap: 8px;
 }
 
+.mobile-back-button,
+.mobile-empty-back-button {
+  display: none;
+}
+
+.logout-button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.logout-button:hover {
+  background: #191922;
+}
+
 .message-list {
   display: flex;
   flex-direction: column;
@@ -141,11 +174,13 @@
 }
 
 .empty-chat {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
 
   height: 100vh;
+  height: 100dvh;
 
   background:
     linear-gradient(rgba(10, 10, 14, 0.93), rgba(10, 10, 14, 0.93)),
@@ -254,13 +289,13 @@ button {
   background: #756ce0;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 1000px) and (min-width: 721px) {
   .app {
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: 250px minmax(0, 1fr);
   }
 
   .message {
-    max-width: 80%;
+    max-width: 78%;
   }
 }
 
@@ -371,4 +406,416 @@ button {
   margin: 12px 4px;
   color: #ff7b7b;
   font-size: 13px;
+}
+
+/* Модальное окно удаления сообщения */
+.delete-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+}
+
+.delete-modal {
+  width: min(100%, 420px);
+  padding: 24px;
+
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+
+  background: #111318;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.55);
+
+  animation: delete-modal-appear 160ms ease-out;
+}
+
+.delete-modal__title {
+  margin: 0 0 10px;
+
+  color: #ffffff;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.delete-modal__text {
+  margin: 0;
+
+  color: #969ba7;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.delete-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  margin-top: 24px;
+}
+
+.delete-modal__button {
+  min-width: 100px;
+  padding: 10px 16px;
+
+  border: none;
+  border-radius: 10px;
+
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+
+  transition:
+    background-color 150ms ease,
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.delete-modal__button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.delete-modal__button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.delete-modal__button--cancel {
+  color: #ffffff;
+  background: #272a31;
+}
+
+.delete-modal__button--cancel:hover:not(:disabled) {
+  background: #323640;
+}
+
+.delete-modal__button--delete {
+  color: #ffffff;
+  background: #d93b4b;
+}
+
+.delete-modal__button--delete:hover:not(:disabled) {
+  background: #ed4758;
+}
+
+@keyframes delete-modal-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Мобильная версия */
+
+@media (max-width: 720px) {
+  .app {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    display: block;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    padding:
+      calc(14px + env(safe-area-inset-top))
+      14px
+      calc(14px + env(safe-area-inset-bottom));
+    border-right: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .chat-pane {
+    display: none;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .app--mobile-chat-open .sidebar {
+    display: none;
+  }
+
+  .app--mobile-chat-open .chat-pane {
+    display: block;
+  }
+
+  .sidebar-user {
+    min-height: 52px;
+  }
+
+  .sidebar-user h2,
+  .chat-header h2 {
+    overflow: hidden;
+    font-size: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar-user__info,
+  .chat-header > div:not(.avatar):not(.chat-actions) {
+    min-width: 0;
+  }
+
+  .avatar {
+    width: 44px;
+  }
+
+  .logout-button {
+    width: 42px;
+    height: 42px;
+    background: #17171e;
+  }
+
+  .search-input {
+    margin: 16px 0 12px;
+    padding: 13px 14px;
+    font-size: 16px;
+  }
+
+  .chat-list,
+  .search-results {
+    gap: 4px;
+  }
+
+  .chat-item {
+    min-height: 70px;
+    gap: 12px;
+    padding: 11px 10px;
+    touch-action: manipulation;
+  }
+
+  .chat-item:hover {
+    background: transparent;
+  }
+
+  .chat-item:active,
+  .chat-item--active {
+    background: #191922;
+  }
+
+  .chat-item h3 {
+    overflow: hidden;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-item p {
+    font-size: 14px;
+  }
+
+  .chat-item time {
+    padding-top: 2px;
+  }
+
+  .search-user {
+    min-height: 62px;
+    padding: 10px;
+    font-size: 16px;
+  }
+
+  .chat-window,
+  .empty-chat {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .chat-header {
+    min-height: calc(66px + env(safe-area-inset-top));
+    gap: 10px;
+    padding:
+      calc(10px + env(safe-area-inset-top))
+      12px
+      10px;
+  }
+
+  .mobile-back-button {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 25px;
+    line-height: 1;
+    touch-action: manipulation;
+  }
+
+  .mobile-back-button:active {
+    background: #20202a;
+  }
+
+  .chat-header .avatar {
+    width: 40px;
+  }
+
+  .chat-header span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-actions {
+    display: none;
+  }
+
+  .message-list {
+    gap: 8px;
+    min-height: 0;
+    padding: 14px 12px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .message {
+    max-width: 86%;
+    padding: 9px 11px;
+    font-size: 15px;
+  }
+
+  .message__footer {
+    gap: 6px;
+  }
+
+  .message__delete {
+    opacity: 1;
+    min-width: 34px;
+    min-height: 30px;
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+
+  .message-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding:
+      10px
+      10px
+      calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .message-form > button:not(.send-button) {
+    display: none;
+  }
+
+  .message-form input {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 16px;
+  }
+
+  .send-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    touch-action: manipulation;
+  }
+
+  .mobile-empty-back-button {
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top));
+    left: 12px;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    background: #17171e;
+    font-size: 25px;
+  }
+
+  .empty-chat .auth-error,
+  .empty-chat .empty-message {
+    max-width: calc(100% - 48px);
+    padding: 20px;
+    text-align: center;
+  }
+
+  .auth-page {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding:
+      calc(18px + env(safe-area-inset-top))
+      16px
+      calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .auth-form {
+    padding: 24px 20px;
+    border-radius: 16px;
+  }
+
+  .auth-form input {
+    font-size: 16px;
+  }
+
+  .delete-modal-backdrop {
+    align-items: flex-end;
+    padding:
+      16px
+      16px
+      calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .delete-modal {
+    width: 100%;
+    padding: 22px 18px;
+    border-radius: 20px;
+  }
+
+  .delete-modal__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .delete-modal__button {
+    min-width: 0;
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 380px) {
+  .sidebar {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+
+  .message-list {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .message-form {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
 }
