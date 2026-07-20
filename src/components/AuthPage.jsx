@@ -33,7 +33,10 @@ function AuthPage({ onLogin }) {
         tokenData.access_token
       );
 
-      onLogin(tokenData.access_token);
+      onLogin(
+        tokenData.access_token,
+        password
+      );
     } catch (error) {
       setError(error.message);
     } finally {

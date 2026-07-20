@@ -6,9 +6,9 @@ async function readError(response) {
   return data?.detail || "Ошибка запроса";
 }
 
-export async function uploadPublicKey(
+export async function saveMyKeyBackup(
   token,
-  publicKey
+  keyData
 ) {
   const response = await fetch(
     `${API_URL}/api/keys/me`,
@@ -18,12 +18,30 @@ export async function uploadPublicKey(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        public_key: publicKey,
-        algorithm: "RSA-OAEP-2048",
-      }),
+      body: JSON.stringify(keyData),
     }
   );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json();
+}
+
+export async function getMyKeyBackup(token) {
+  const response = await fetch(
+    `${API_URL}/api/keys/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
 
   if (!response.ok) {
     throw new Error(await readError(response));

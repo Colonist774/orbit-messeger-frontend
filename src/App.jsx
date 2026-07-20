@@ -21,7 +21,8 @@ import {
 } from "./api/messages";
 
 import {
-  uploadPublicKey,
+  saveMyKeyBackup,
+  getMyKeyBackup,
   getUserPublicKey,
 } from "./api/keys";
 
@@ -31,6 +32,8 @@ import {
   importPublicKey,
   encryptMessage,
   decryptMessage,
+  encryptPrivateKeyBackup,
+  decryptPrivateKeyBackup,
 } from "./utils/crypto";
 
 import {
@@ -98,6 +101,11 @@ function App() {
     localStorage.getItem("accessToken")
   );
 
+  const [
+    cryptoPassword,
+    setCryptoPassword,
+  ] = useState("");
+
   const [currentUser, setCurrentUser] =
     useState(null);
 
@@ -162,99 +170,154 @@ function App() {
   // Создание или загрузка RSA-ключей пользователя.
   useEffect(() => {
     if (!token || !currentUser) {
+      setCryptoKeys(null);
       return;
     }
+
+    let isCancelled = false;
 
     async function prepareCrypto() {
       try {
         setIsPreparingCrypto(true);
         setAppError("");
 
-        let privateKey = await loadPrivateKey();
-        let publicKey = await loadPublicKey();
+        let privateKey =
+          await loadPrivateKey(
+            currentUser.id
+          );
+
+        let publicKey =
+          await loadPublicKey(
+            currentUser.id
+          );
+
+        const serverBackup =
+          await getMyKeyBackup(token);
 
         if (!privateKey || !publicKey) {
-          const keyPair = await generateKeyPair();
+          if (
+            serverBackup
+              ?.encrypted_private_key
+          ) {
+            if (!cryptoPassword) {
+              throw new Error(
+                "Для восстановления ключей нужно выйти и войти снова"
+              );
+            }
 
-          privateKey = keyPair.privateKey;
-          publicKey = keyPair.publicKey;
+            privateKey =
+              await decryptPrivateKeyBackup({
+                encryptedPrivateKey:
+                  serverBackup
+                    .encrypted_private_key,
+                iv:
+                  serverBackup
+                    .private_key_iv,
+                salt:
+                  serverBackup
+                    .private_key_salt,
+                iterations:
+                  serverBackup
+                    .private_key_iterations,
+                password: cryptoPassword,
+              });
 
-          await savePrivateKey(privateKey);
-          await savePublicKey(publicKey);
+            publicKey =
+              await importPublicKey(
+                serverBackup.public_key
+              );
+
+            await savePrivateKey(
+              currentUser.id,
+              privateKey
+            );
+
+            await savePublicKey(
+              currentUser.id,
+              publicKey
+            );
+          } else {
+            if (!cryptoPassword) {
+              throw new Error(
+                "Для создания ключей нужно выйти и войти снова"
+              );
+            }
+
+            const keyPair =
+              await generateKeyPair();
+
+            privateKey = keyPair.privateKey;
+            publicKey = keyPair.publicKey;
+
+            await savePrivateKey(
+              currentUser.id,
+              privateKey
+            );
+
+            await savePublicKey(
+              currentUser.id,
+              publicKey
+            );
+          }
         }
 
-        const exportedPublicKey =
-          await exportPublicKey(publicKey);
+        /*
+        * Создаём или обновляем серверную
+        * зашифрованную резервную копию только
+        * тогда, когда в памяти есть пароль.
+        *
+        * Это важно: запрос без backup-полей
+        * мог бы затереть существующую копию.
+        */
+        if (cryptoPassword) {
+          const exportedPublicKey =
+            await exportPublicKey(publicKey);
 
-        await uploadPublicKey(
-          token,
-          exportedPublicKey
-        );
+          const encryptedBackup =
+            await encryptPrivateKeyBackup({
+              privateKey,
+              password: cryptoPassword,
+            });
 
-        setCryptoKeys({
-          privateKey,
-          publicKey,
-        });
+          await saveMyKeyBackup(token, {
+            public_key:
+              exportedPublicKey,
+            algorithm:
+              "RSA-OAEP-2048",
+            ...encryptedBackup,
+          });
+        }
+
+        if (!isCancelled) {
+          setCryptoKeys({
+            privateKey,
+            publicKey,
+          });
+        }
       } catch (error) {
-        setAppError(
-          `Ошибка подготовки шифрования: ${error.message}`
-        );
+        if (!isCancelled) {
+          setCryptoKeys(null);
+          setAppError(
+            `Ошибка подготовки шифрования: ${error.message}`
+          );
+        }
       } finally {
-        setIsPreparingCrypto(false);
+        if (!isCancelled) {
+          setIsPreparingCrypto(false);
+        }
       }
     }
 
     prepareCrypto();
-  }, [token, currentUser]);
 
-  useEffect(() => {
-    if (!token || !currentUser) {
-      return;
-    }
-
-    async function loadChats() {
-      try {
-        setIsLoadingChats(true);
-        setAppError("");
-
-        const backendChats = await getChats(token);
-
-        const preparedChats =
-          backendChats.map(convertBackendChat);
-
-        setChats(preparedChats);
-
-        if (preparedChats.length > 0) {
-          setSelectedChatId(
-            (currentSelectedChatId) => {
-              const stillExists =
-                preparedChats.some(
-                  (chat) =>
-                    chat.id ===
-                    currentSelectedChatId
-                );
-
-              return stillExists
-                ? currentSelectedChatId
-                : preparedChats[0].id;
-            }
-          );
-        } else {
-          setSelectedChatId(null);
-        }
-      } catch (error) {
-        setAppError(error.message);
-      } finally {
-        setIsLoadingChats(false);
-      }
-    }
-
-    loadChats();
-  }, [token, currentUser]);
-
-  const selectedChatName = chats.find(
-    (chat) => chat.id === selectedChatId
-  )?.name;
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    token,
+    currentUser,
+    cryptoPassword,
+  ]);
 
   // Загрузка и расшифровка истории сообщений.
   useEffect(() => {
@@ -647,8 +710,12 @@ function App() {
     }
   }
 
-  function handleLogin(newToken) {
+  function handleLogin(
+    newToken,
+    password
+  ) {
     setIsCheckingAuth(true);
+    setCryptoPassword(password);
     setToken(newToken);
   }
 
@@ -664,6 +731,8 @@ function App() {
     setLoadedMessagesChatId(null);
     setMessagePendingDeletion(null);
     setIsMobileChatOpen(false);
+    setCryptoPassword("");
+    setCryptoKeys(null);
   }
 
   function handleDeleteMessage(chatId, messageId) {

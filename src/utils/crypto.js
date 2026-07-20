@@ -57,6 +57,167 @@ export async function importPublicKey(publicKeyString) {
   );
 }
 
+const PRIVATE_KEY_BACKUP_ITERATIONS = 310000;
+
+export async function exportPrivateKey(
+  privateKey
+) {
+  const exported = await crypto.subtle.exportKey(
+    "jwk",
+    privateKey
+  );
+
+  return JSON.stringify(exported);
+}
+
+export async function importPrivateKey(
+  privateKeyString
+) {
+  const privateKeyData =
+    JSON.parse(privateKeyString);
+
+  return crypto.subtle.importKey(
+    "jwk",
+    privateKeyData,
+    {
+      name: "RSA-OAEP",
+      hash: "SHA-256",
+    },
+    true,
+    ["decrypt"]
+  );
+}
+
+async function deriveBackupKey({
+  password,
+  salt,
+  iterations,
+}) {
+  const passwordBytes =
+    new TextEncoder().encode(password);
+
+  const passwordKey =
+    await crypto.subtle.importKey(
+      "raw",
+      passwordBytes,
+      "PBKDF2",
+      false,
+      ["deriveKey"]
+    );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations,
+      hash: "SHA-256",
+    },
+    passwordKey,
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+export async function encryptPrivateKeyBackup({
+  privateKey,
+  password,
+}) {
+  const exportedPrivateKey =
+    await exportPrivateKey(privateKey);
+
+  const salt = crypto.getRandomValues(
+    new Uint8Array(16)
+  );
+
+  const iv = crypto.getRandomValues(
+    new Uint8Array(12)
+  );
+
+  const encryptionKey =
+    await deriveBackupKey({
+      password,
+      salt,
+      iterations:
+        PRIVATE_KEY_BACKUP_ITERATIONS,
+    });
+
+  const encryptedPrivateKey =
+    await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+      },
+      encryptionKey,
+      new TextEncoder().encode(
+        exportedPrivateKey
+      )
+    );
+
+  return {
+    encrypted_private_key:
+      arrayBufferToBase64(
+        encryptedPrivateKey
+      ),
+    private_key_iv:
+      arrayBufferToBase64(iv),
+    private_key_salt:
+      arrayBufferToBase64(salt),
+    private_key_kdf: "PBKDF2-SHA256",
+    private_key_iterations:
+      PRIVATE_KEY_BACKUP_ITERATIONS,
+  };
+}
+
+export async function decryptPrivateKeyBackup({
+  encryptedPrivateKey,
+  iv,
+  salt,
+  iterations,
+  password,
+}) {
+  const decryptionKey =
+    await deriveBackupKey({
+      password,
+      salt: new Uint8Array(
+        base64ToArrayBuffer(salt)
+      ),
+      iterations,
+    });
+
+  let decryptedPrivateKey;
+
+  try {
+    decryptedPrivateKey =
+      await crypto.subtle.decrypt(
+        {
+          name: "AES-GCM",
+          iv: new Uint8Array(
+            base64ToArrayBuffer(iv)
+          ),
+        },
+        decryptionKey,
+        base64ToArrayBuffer(
+          encryptedPrivateKey
+        )
+      );
+  } catch {
+    throw new Error(
+      "Не удалось восстановить ключ. Возможно, введён неверный пароль"
+    );
+  }
+
+  const privateKeyString =
+    new TextDecoder().decode(
+      decryptedPrivateKey
+    );
+
+  return importPrivateKey(privateKeyString);
+}
+
 export async function encryptMessage({
   text,
   publicKeys,

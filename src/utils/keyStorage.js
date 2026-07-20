@@ -1,99 +1,116 @@
 const DB_NAME = "orbit";
 const STORE_NAME = "keys";
 
-const PRIVATE_KEY_NAME = "privateKey";
-const PUBLIC_KEY_NAME = "publicKey";
-
 function openDatabase() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
 
-        request.onupgradeneeded = () => {
-            if (
-                !request.result.objectStoreNames.contains(
-                    STORE_NAME
-                )
-            ) {
-                request.result.createObjectStore(
-                    STORE_NAME
-                );
-            }
-        };
+    request.onupgradeneeded = () => {
+      if (
+        !request.result.objectStoreNames.contains(
+          STORE_NAME
+        )
+      ) {
+        request.result.createObjectStore(
+          STORE_NAME
+        );
+      }
+    };
 
-        request.onsuccess = () => {
-            resolve(request.result);
-        };
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
 
-        request.onerror = () => {
-            reject(request.error);
-        };
-    });
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
+}
+
+function getPrivateKeyName(userId) {
+  return `privateKey:${userId}`;
+}
+
+function getPublicKeyName(userId) {
+  return `publicKey:${userId}`;
 }
 
 async function saveKey(name, key) {
-    const db = await openDatabase();
+  const db = await openDatabase();
 
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-            STORE_NAME,
-            "readwrite"
-        );
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(
+      STORE_NAME,
+      "readwrite"
+    );
 
-        const store =
-            transaction.objectStore(STORE_NAME);
+    const store =
+      transaction.objectStore(STORE_NAME);
 
-        store.put(key, name);
+    store.put(key, name);
 
-        transaction.oncomplete = () => {
-            db.close();
-            resolve();
-        };
+    transaction.oncomplete = () => {
+      db.close();
+      resolve();
+    };
 
-        transaction.onerror = () => {
-            db.close();
-            reject(transaction.error);
-        };
-    });
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error);
+    };
+  });
 }
 
 async function loadKey(name) {
-    const db = await openDatabase();
+  const db = await openDatabase();
 
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-            STORE_NAME,
-            "readonly"
-        );
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(
+      STORE_NAME,
+      "readonly"
+    );
 
-        const store =
-            transaction.objectStore(STORE_NAME);
+    const store =
+      transaction.objectStore(STORE_NAME);
 
-        const request = store.get(name);
+    const request = store.get(name);
 
-        request.onsuccess = () => {
-            db.close();
-            resolve(request.result ?? null);
-        };
+    request.onsuccess = () => {
+      db.close();
+      resolve(request.result ?? null);
+    };
 
-        request.onerror = () => {
-            db.close();
-            reject(request.error);
-        };
-    });
+    request.onerror = () => {
+      db.close();
+      reject(request.error);
+    };
+  });
 }
 
-export function savePrivateKey(privateKey) {
-    return saveKey(PRIVATE_KEY_NAME, privateKey);
+export function savePrivateKey(
+  userId,
+  privateKey
+) {
+  return saveKey(
+    getPrivateKeyName(userId),
+    privateKey
+  );
 }
 
-export function loadPrivateKey() {
-    return loadKey(PRIVATE_KEY_NAME);
+export function loadPrivateKey(userId) {
+  return loadKey(getPrivateKeyName(userId));
 }
 
-export function savePublicKey(publicKey) {
-    return saveKey(PUBLIC_KEY_NAME, publicKey);
+export function savePublicKey(
+  userId,
+  publicKey
+) {
+  return saveKey(
+    getPublicKeyName(userId),
+    publicKey
+  );
 }
 
-export function loadPublicKey() {
-    return loadKey(PUBLIC_KEY_NAME);
+export function loadPublicKey(userId) {
+  return loadKey(getPublicKeyName(userId));
 }
