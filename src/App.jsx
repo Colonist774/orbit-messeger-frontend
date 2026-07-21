@@ -151,10 +151,130 @@ function App() {
   const selectedChatName =
     selectedChat?.name ?? "";
 
+  const chatIdsKey = chats
+    .map((chat) => chat.id)
+    .sort((a, b) => a - b)
+    .join(",");
+
+
   useEffect(() => {
     if (!token) {
       return;
     }
+  
+
+  // Загрузка последних сообщений для превью списка чатов.
+  useEffect(() => {
+    if (
+      !token ||
+      !currentUser ||
+      !cryptoKeys ||
+      chats.length === 0
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadChatPreviews() {
+      try {
+        const previews = await Promise.all(
+          chats.map(async (chat) => {
+            try {
+              const response = await getMessages(
+                token,
+                chat.id
+              );
+
+              const lastBackendMessage =
+                response.messages.at(-1);
+
+              if (!lastBackendMessage) {
+                return {
+                  chatId: chat.id,
+                  lastMessage:
+                    "Сообщений пока нет",
+                  time: "",
+                };
+              }
+
+              let text;
+
+              try {
+                text = await decryptMessage({
+                  ciphertext:
+                    lastBackendMessage.ciphertext,
+                  iv: lastBackendMessage.iv,
+                  currentUserId:
+                    currentUser.id,
+                  privateKey:
+                    cryptoKeys.privateKey,
+                });
+              } catch {
+                text =
+                  "Не удалось расшифровать сообщение";
+              }
+
+              return {
+                chatId: chat.id,
+                lastMessage: text,
+                time: formatTime(
+                  lastBackendMessage.created_at
+                ),
+              };
+            } catch (error) {
+              console.error(
+                `Не удалось загрузить превью чата ${chat.id}:`,
+                error
+              );
+
+              return null;
+            }
+          })
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        setChats((previousChats) =>
+          previousChats.map((chat) => {
+            const preview = previews.find(
+              (item) =>
+                item?.chatId === chat.id
+            );
+
+            if (!preview) {
+              return chat;
+            }
+
+            return {
+              ...chat,
+              lastMessage:
+                preview.lastMessage,
+              time: preview.time,
+            };
+          })
+        );
+      } catch (error) {
+        console.error(
+          "Ошибка загрузки превью чатов:",
+          error
+        );
+      }
+    }
+
+    loadChatPreviews();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    token,
+    currentUser,
+    cryptoKeys,
+    chatIdsKey,
+  ]);
 
 
     async function loadCurrentUser() {
@@ -507,48 +627,90 @@ function App() {
             "Не удалось расшифровать сообщение";
         }
 
-        setChats((previousChats) =>
-          previousChats.map((chat) => {
-            if (
-              chat.id !==
+        const chatsResponse =
+          await getChats(token);
+
+        const backendChats = Array.isArray(
+          chatsResponse
+        )
+          ? chatsResponse
+          : chatsResponse.chats ?? [];
+
+        const serverChats =
+          backendChats.map(convertBackendChat);
+
+        const incomingChat =
+          serverChats.find(
+            (chat) =>
+              chat.id === backendMessage.chat_id
+          );
+
+        setChats((previousChats) => {
+          const existingChat =
+            previousChats.find(
+              (chat) =>
+                chat.id ===
+                backendMessage.chat_id
+            );
+
+          const targetChat =
+            existingChat ?? incomingChat;
+
+          if (!targetChat) {
+            console.error(
+              "Входящий чат не найден:",
               backendMessage.chat_id
-            ) {
-              return chat;
-            }
+            );
 
-            const alreadyExists =
-              chat.messages.some(
-                (message) =>
-                  message.id ===
-                  backendMessage.id
-              );
+            return previousChats;
+          }
 
-            if (alreadyExists) {
-              return chat;
-            }
+          const alreadyExists =
+            targetChat.messages.some(
+              (message) =>
+                message.id ===
+                backendMessage.id
+            );
 
-            const preparedMessage = {
-              id: backendMessage.id,
-              author: chat.name,
-              text,
-              time: formatTime(
-                backendMessage.created_at
-              ),
-              isOwn: false,
-            };
+          if (alreadyExists) {
+            return previousChats;
+          }
 
-            return {
-              ...chat,
-              lastMessage:
-                preparedMessage.text,
-              time: preparedMessage.time,
-              messages: [
-                ...chat.messages,
-                preparedMessage,
-              ],
-            };
-          })
-        );
+          const preparedMessage = {
+            id: backendMessage.id,
+            author: targetChat.name,
+            text,
+            time: formatTime(
+              backendMessage.created_at
+            ),
+            isOwn: false,
+          };
+
+          const updatedChat = {
+            ...targetChat,
+            lastMessage: preparedMessage.text,
+            time: preparedMessage.time,
+            messages: [
+              ...targetChat.messages,
+              preparedMessage,
+            ],
+          };
+
+          if (!existingChat) {
+            return [
+              updatedChat,
+              ...previousChats,
+            ];
+          }
+
+          return [
+            updatedChat,
+            ...previousChats.filter(
+              (chat) =>
+                chat.id !== updatedChat.id
+            ),
+          ];
+        });
       },
       
       onMessageDeleted({ chatId, messageId }) {
