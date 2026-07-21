@@ -161,8 +161,24 @@ function App() {
     if (!token) {
       return;
     }
-  
 
+    async function loadCurrentUser() {
+      try {
+        const user = await getCurrentUser(token);
+        setCurrentUser(user);
+      } catch {
+        localStorage.removeItem("accessToken");
+        setToken(null);
+        setCurrentUser(null);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    }
+
+    loadCurrentUser();
+  }, [token]);
+
+  
   // Загрузка последних сообщений для превью списка чатов.
   useEffect(() => {
     if (
@@ -276,22 +292,6 @@ function App() {
     chatIdsKey,
   ]);
 
-
-    async function loadCurrentUser() {
-      try {
-        const user = await getCurrentUser(token);
-        setCurrentUser(user);
-      } catch {
-        localStorage.removeItem("accessToken");
-        setToken(null);
-        setCurrentUser(null);
-      } finally {
-        setIsCheckingAuth(false);
-      }
-    }
-
-    loadCurrentUser();
-  }, [token]);
 
   // Создание или загрузка RSA-ключей пользователя.
   useEffect(() => {
