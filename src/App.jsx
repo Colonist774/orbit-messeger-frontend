@@ -157,6 +157,7 @@ function App() {
     .join(",");
 
 
+  // Загрузка текущего пользователя при наличии токена.
   useEffect(() => {
     if (!token) {
       return;
