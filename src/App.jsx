@@ -97,51 +97,46 @@ function removeMessageFromChats(
 
 
 function App() {
-  const [token, setToken] = useState(
-    localStorage.getItem("accessToken")
-  );
+  const [token, setToken] = //jwt-токен
+    useState(localStorage.getItem("accessToken"));
 
-  const [
-    cryptoPassword,
-    setCryptoPassword,
-  ] = useState("");
+  const [cryptoPassword, setCryptoPassword] = //пароль для шифрования ключей
+    useState("");
 
-  const [currentUser, setCurrentUser] =
+  const [currentUser, setCurrentUser] = //текущий пользователь
     useState(null);
 
-  const [isCheckingAuth, setIsCheckingAuth] =
+  const [isCheckingAuth, setIsCheckingAuth] = //флаг проверки авторизации
     useState(Boolean(token));
 
-  const [chats, setChats] = useState([]);
+  const [chats, setChats] = //cписок чатов пользователя
+    useState([]);
 
-  const [selectedChatId, setSelectedChatId] =
+  const [selectedChatId, setSelectedChatId] = //id выбранного чата
     useState(null);
 
-  const [isLoadingChats, setIsLoadingChats] =
+  const [isLoadingChats, setIsLoadingChats] = //флаг загрузки чатов
     useState(false);
 
-  const [
-    loadedMessagesChatId,
-    setLoadedMessagesChatId,
-  ] = useState(null);
-
-  const [appError, setAppError] = useState("");
-
-  const [cryptoKeys, setCryptoKeys] =
+  const [loadedMessagesChatId, setLoadedMessagesChatId] = //id чата, для которого загружены сообщения
     useState(null);
 
-  const [isPreparingCrypto, setIsPreparingCrypto] =
+  const [appError, setAppError] = //флаг ошибки приложения
+    useState("");
+
+  const [cryptoKeys, setCryptoKeys] = //объект с приватным и публичным ключами пользователя
+    useState(null);
+
+  const [isPreparingCrypto, setIsPreparingCrypto] = //флаг подготовки шифрования
     useState(false);
 
-  const [
-    messagePendingDeletion,
-    setMessagePendingDeletion,
-  ] = useState(null);
+  const [messagePendingDeletion, setMessagePendingDeletion] = //объект с информацией о сообщении, которое ожидает удаления
+    useState(null);
 
-  const [isDeletingMessage, setIsDeletingMessage] =
+  const [isDeletingMessage, setIsDeletingMessage] = //флаг удаления сообщения
     useState(false);
 
-  const [isMobileChatOpen, setIsMobileChatOpen] =
+  const [isMobileChatOpen, setIsMobileChatOpen] = //флаг открытия чата на мобильном устройствеg
     useState(false);
 
   const selectedChat = chats.find(
