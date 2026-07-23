@@ -1,3 +1,7 @@
+// отвечает за работу с WebSocket-соединением, создание сокета для обмена сообщениями 
+// и обработку событий WebSocket.
+
+
 const WS_PROTOCOL =
   window.location.protocol === "https:"
     ? "wss:"
