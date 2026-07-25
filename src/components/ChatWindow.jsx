@@ -23,12 +23,15 @@ function ChatWindow({     //принимаем:
   const [text, setText] = useState("")      //для приема данных из input
   const isSendingRef = useRef(false)
   const messagesEndRef = useRef(null);
+  const messageListRef = useRef(null);
+  const lastMessageId =
+    chat?.messages.at(-1)?.id;
 
   useLayoutEffect(() => {
     messagesEndRef.current?.scrollIntoView({
       behavior: "auto",
-    })
-  }, [chat?.id, chat?.messages.length])
+    });
+  }, [chat?.id, lastMessageId]);
 
 
   //меняем состояниие text
@@ -70,6 +73,45 @@ function ChatWindow({     //принимаем:
     }
   }
 
+  //загрузка более старых сообщений и сохранение позиции прокрутки
+  async function loadOlderMessagesAndKeepPosition() {
+    const messageList = messageListRef.current;
+
+    if (
+      !messageList ||
+      !hasMoreMessages ||
+      isLoadingOlderMessages
+    ) {
+      return;
+    }
+
+    const previousScrollHeight =
+      messageList.scrollHeight;
+
+    const previousScrollTop =
+      messageList.scrollTop;
+
+    await onLoadOlderMessages();
+
+    requestAnimationFrame(() => {
+      const addedHeight =
+        messageList.scrollHeight -
+        previousScrollHeight;
+
+      messageList.scrollTop =
+        previousScrollTop + addedHeight;
+    });
+  }
+  
+  //обработчик события прокрутки сообщений, который загружает более старые сообщения, если пользователь прокрутил вверх
+  async function handleMessagesScroll(event) {
+    if (event.currentTarget.scrollTop > 100) {
+      return;
+    }
+
+    await loadOlderMessagesAndKeepPosition();
+  }
+
   if (!chat) {      //если чат не выбран и переменная chat имеет значение 0, выводим "Выберите чат"
     return (
       <main className="empty-chat"> 
@@ -98,19 +140,6 @@ function ChatWindow({     //принимаем:
           <h2>{chat.name}</h2>
           <span>{chat.status}</span>
         </div>
-
-        {hasMoreMessages && (
-          <button
-            type="button"
-            onClick={onLoadOlderMessages}
-            disabled={isLoadingOlderMessages}
-          >
-            {isLoadingOlderMessages
-              ? "Загрузка..."
-              : "Загрузить предыдущие сообщения"}
-          </button>
-        )}
-
         <div className="chat-actions">
           <button type="button" aria-label="Поиск">
             ⌕
@@ -126,7 +155,11 @@ function ChatWindow({     //принимаем:
         </div>
       </header>
 
-      <section className="message-list">
+      <section 
+        className="message-list"
+        ref={messageListRef}
+        onScroll={handleMessagesScroll}
+      >
         {chat.messages.length === 0 ? (         //если в чате нет сообщений, выводим "Сообщений пока нет"
           <p className="empty-message">
             Сообщений пока нет
