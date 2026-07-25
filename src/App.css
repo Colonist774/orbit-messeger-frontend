@@ -864,3 +864,11 @@ button {
     font-size: 13px;
   }
 }
+
+/* Стили загрузки более старых сообщений */
+.older-messages-loading {
+  margin: 8px auto 14px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  text-align: center;
+}
