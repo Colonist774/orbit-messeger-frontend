@@ -196,31 +196,40 @@ function App() {
       !token ||
       !currentUser ||
       !cryptoKeys ||
-      chats.length === 0
+      !chatIdsKey
     ) {
       return;
     }
 
     let isCancelled = false;
 
+    const chatIds = chatIdsKey
+      .split(",")
+      .map(Number);
+
     async function loadChatPreviews() {
       try {
         const previews = await Promise.all(
-          chats.map(async (chat) => {
+          chatIds.map(async (chatId) => {
             try {
               const response = await getMessages(
                 token,
-                chat.id,
+                chatId,
                 null,
                 1
               );
 
+              const backendMessages =
+                Array.isArray(response)
+                  ? response
+                  : response.messages ?? [];
+
               const lastBackendMessage =
-                response.messages.at(-1);
+                backendMessages.at(-1);
 
               if (!lastBackendMessage) {
                 return {
-                  chatId: chat.id,
+                  chatId,
                   lastMessage:
                     "Сообщений пока нет",
                   time: "",
@@ -245,7 +254,7 @@ function App() {
               }
 
               return {
-                chatId: chat.id,
+                chatId,
                 lastMessage: text,
                 time: formatTime(
                   lastBackendMessage.created_at
@@ -253,7 +262,7 @@ function App() {
               };
             } catch (error) {
               console.error(
-                `Не удалось загрузить превью чата ${chat.id}:`,
+                `Не удалось загрузить превью чата ${chatId}:`,
                 error
               );
 
@@ -309,7 +318,6 @@ function App() {
   // Создание или загрузка RSA-ключей пользователя.
   useEffect(() => {
     if (!token || !currentUser) {
-      setCryptoKeys(null);
       return;
     }
 
@@ -461,8 +469,6 @@ function App() {
   // Загрузка списка чатов пользователя.
   useEffect(() => {
     if (!token || !currentUser) {
-      setChats([]);
-      setSelectedChatId(null);
       return;
     }
 
@@ -778,7 +784,7 @@ function App() {
       if (isCancelled) {
         return;
       }
-      const socket = createMessageSocket(token, {
+      socket = createMessageSocket(token, {
         onOpen() {
           if (hasConnectedOnce) {
             setMessagesReloadKey(
@@ -1148,7 +1154,9 @@ function App() {
     setMessagePendingDeletion(null);
     setIsMobileChatOpen(false);
     setCryptoPassword("");
-    setCryptoKeys(null);
+    setHasMoreMessages(false);
+    setNextBeforeId(null);
+    setIsLoadingOlderMessages(false);
   }
 
   function handleDeleteMessage(chatId, messageId) {
