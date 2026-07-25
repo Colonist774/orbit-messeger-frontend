@@ -646,10 +646,13 @@ function App() {
   async function handleLoadOlderMessages() {
     if (
       !token ||
-      !selectedChatId ||
+      selectedChatId === null ||
       !nextBeforeId ||
       !hasMoreMessages ||
-      isLoadingOlderMessages
+      isLoadingOlderMessages ||
+      !currentUser ||
+      !cryptoKeys ||
+      !selectedChatName
     ) {
       return;
     }
@@ -664,13 +667,42 @@ function App() {
         nextBeforeId
       );
 
-      const backendMessages = response.messages ?? [];
+      const backendMessages = Array.isArray(response)
+        ? response
+        : response.messages ?? [];
 
-      // Здесь расшифровываем их так же,
-      // как при первой загрузке.
       const preparedMessages = await Promise.all(
         backendMessages.map(async (message) => {
-          // твой существующий код подготовки сообщения
+          let text;
+
+          try {
+            text = await decryptMessage({
+              ciphertext: message.ciphertext,
+              iv: message.iv,
+              currentUserId: currentUser.id,
+              privateKey: cryptoKeys.privateKey,
+            });
+          } catch (error) {
+            console.error(
+              "Ошибка расшифровки старого сообщения:",
+              error
+            );
+
+            text = "Не удалось расшифровать сообщение";
+          }
+
+          const isOwn =
+            message.sender_id === currentUser.id;
+
+          return {
+            id: message.id,
+            author: isOwn
+              ? currentUser.username
+              : selectedChatName,
+            text,
+            time: formatTime(message.created_at),
+            isOwn,
+          };
         })
       );
 
@@ -680,12 +712,20 @@ function App() {
             return chat;
           }
 
+          const validCurrentMessages =
+            chat.messages.filter(Boolean);
+
+          const validPreparedMessages =
+            preparedMessages.filter(Boolean);
+
           const existingIds = new Set(
-            chat.messages.map((message) => message.id)
+            validCurrentMessages.map(
+              (message) => message.id
+            )
           );
 
           const uniqueOlderMessages =
-            preparedMessages.filter(
+            validPreparedMessages.filter(
               (message) =>
                 !existingIds.has(message.id)
             );
@@ -694,15 +734,29 @@ function App() {
             ...chat,
             messages: [
               ...uniqueOlderMessages,
-              ...chat.messages,
+              ...validCurrentMessages,
             ],
           };
         })
       );
 
-      setHasMoreMessages(response.has_more);
-      setNextBeforeId(response.next_before_id);
+      setHasMoreMessages(
+        Array.isArray(response)
+          ? false
+          : response.has_more
+      );
+
+      setNextBeforeId(
+        Array.isArray(response)
+          ? null
+          : response.next_before_id
+      );
     } catch (error) {
+      console.error(
+        "Ошибка загрузки старых сообщений:",
+        error
+      );
+
       setActionError(error.message);
     } finally {
       setIsLoadingOlderMessages(false);
