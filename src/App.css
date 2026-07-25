@@ -173,6 +173,14 @@
   padding: 24px;
 }
 
+/* Невидимый маркер для предварительной загрузки старых сообщений. */
+.messages-load-trigger {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 1px;
+  pointer-events: none;
+}
+
 .empty-chat {
   position: relative;
   display: flex;

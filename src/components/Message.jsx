@@ -3,6 +3,7 @@
 
 
 function Message({
+  messageId,
   author,
   text,
   time,
@@ -12,6 +13,7 @@ function Message({
 }) {
   return (
     <article
+      data-message-id={messageId}
       className={`message ${
         isOwn ? "message--own" : ""
       }`}

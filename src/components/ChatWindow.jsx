@@ -287,27 +287,23 @@ function ChatWindow({     //принимаем:
                 />
               )}
 
-              <div
-                data-message-id={message.id}
-                className="message-anchor"
-              >
-                <Message
-                  author={message.author}
-                  text={message.text}
-                  time={message.time}
-                  isOwn={message.isOwn}
-                  canDelete={
-                    message.isOwn &&
-                    !message.isSending
-                  }
-                  onDelete={() =>
-                    onDeleteMessage(
-                      chat.id,
-                      message.id
-                    )
-                  }
-                />
-              </div>
+              <Message
+                messageId={message.id}
+                author={message.author}
+                text={message.text}
+                time={message.time}
+                isOwn={message.isOwn}
+                canDelete={
+                  message.isOwn &&
+                  !message.isSending
+                }
+                onDelete={() =>
+                  onDeleteMessage(
+                    chat.id,
+                    message.id
+                  )
+                }
+              />
             </Fragment>
           ))
         )}
