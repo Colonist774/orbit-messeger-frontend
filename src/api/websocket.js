@@ -17,6 +17,7 @@ export function createMessageSocket(token, handlers = {}) {
 
   socket.onopen = () => {
     console.log("WebSocket подключён");
+    handlers.onOpen?.();
   };
 
   socket.onmessage = (event) => {

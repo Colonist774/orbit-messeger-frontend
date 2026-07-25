@@ -142,6 +142,9 @@ function App() {
   const [isMobileChatOpen, setIsMobileChatOpen] = //флаг открытия чата на мобильном устройствеg
     useState(false);
 
+  const [messagesReloadKey, setMessagesReloadKey] =
+    useState(0);
+
   const selectedChat = chats.find(
     (chat) => chat.id === selectedChatId
   );
@@ -609,6 +612,7 @@ function App() {
     cryptoKeys,
     selectedChatId,
     selectedChatName,
+    messagesReloadKey,
   ]);
 
   // Получение и расшифровка новых сообщений.
@@ -620,12 +624,23 @@ function App() {
     let isCancelled = false;
     let socket = null;
     let reconnectTimer = null;
+    let hasConnectedOnce = false;
 
     function connect() {
       if (isCancelled) {
         return;
       }
       const socket = createMessageSocket(token, {
+        onOpen() {
+          if (hasConnectedOnce) {
+            setMessagesReloadKey(
+              (previousKey) => previousKey + 1
+            );
+          }
+
+          hasConnectedOnce = true;
+        },
+
         async onMessageCreated(backendMessage) {
           if (
             backendMessage.sender_id ===
