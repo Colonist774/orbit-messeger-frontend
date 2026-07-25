@@ -14,6 +14,7 @@ function ChatWindow({     //принимаем:
   onBack,                       //возврат к списку чатов на мобильном
   onSendMessage,                //функцию - отправка сообщений
   onDeleteMessage,              //функцию - удаление сообщений
+  error                         //ошибка при отправке или удалении сообщений
 }) {
 
   const [text, setText] = useState("")      //для приема данных из input
@@ -139,6 +140,19 @@ function ChatWindow({     //принимаем:
         )}
         <div ref={messagesEndRef} />
       </section>
+      
+      {error && (
+        <div
+          className="chat-action-error"
+          role="alert"
+        >
+          <span className="chat-action-error-icon">
+            !
+          </span>
+
+          <span>{error}</span>
+        </div>
+      )}
 
       <form className="message-form" onSubmit={sendMessage}>
         <button type="button" aria-label="Добавить файл">

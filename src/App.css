@@ -819,3 +819,48 @@ button {
     padding-right: 8px;
   }
 }
+
+
+/*Стили ошибок*/
+.chat-action-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  margin: 0 16px 10px;
+  padding: 10px 14px;
+
+  color: #ffb4b4;
+  background: rgba(120, 25, 35, 0.22);
+  border: 1px solid rgba(255, 100, 115, 0.35);
+  border-radius: 12px;
+
+  font-size: 14px;
+  line-height: 1.4;
+
+  backdrop-filter: blur(8px);
+}
+
+.chat-action-error-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+
+  width: 22px;
+  height: 22px;
+
+  color: #160508;
+  background: #ff6b78;
+  border-radius: 50%;
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .chat-action-error {
+    margin: 0 10px 8px;
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+}

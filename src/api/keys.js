@@ -5,6 +5,10 @@
 const API_URL = "";
 
 async function readError(response) {
+  if (response.status === 401) {
+    return "Сессия истекла. Войдите заново.";
+  }
+
   const data = await response.json().catch(() => null);
 
   return data?.detail || "Ошибка запроса";

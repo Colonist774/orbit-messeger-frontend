@@ -124,6 +124,9 @@ function App() {
   const [appError, setAppError] = //флаг ошибки приложения
     useState("");
 
+  const [actionError, setActionError] = //флаг ошибки действия (отправка сообщения, удаление сообщения и т.д.)
+    useState("");
+
   const [cryptoKeys, setCryptoKeys] = //объект с приватным и публичным ключами пользователя
     useState(null);
 
@@ -151,7 +154,7 @@ function App() {
     .sort((a, b) => a - b)
     .join(",");
 
-
+    
   // Загрузка текущего пользователя при наличии токена.
   useEffect(() => {
     if (!token) {
@@ -460,7 +463,7 @@ function App() {
 
         const backendChats = Array.isArray(response)
           ? response
-          : response.chats ?? [];
+          : response.chats ?? []; 
 
         const preparedChats =
           backendChats.map(convertBackendChat);
@@ -498,6 +501,8 @@ function App() {
       return;
     }
 
+    let isCancelled = false;
+
     async function loadMessages() {
       try {
         setAppError("");
@@ -507,52 +512,52 @@ function App() {
           selectedChatId
         );
 
+        if (isCancelled) {
+          return;
+        }
+
         if (!selectedChatName) {
           return;
         }
 
-        const preparedMessages =
-          await Promise.all(
-            response.messages.map(async (message) => {
-              let text;
+        const preparedMessages = await Promise.all(
+          response.messages.map(async (message) => {
+            let text;
 
-              try {
-                text = await decryptMessage({
-                  ciphertext:
-                    message.ciphertext,
-                  iv: message.iv,
-                  currentUserId:
-                    currentUser.id,
-                  privateKey:
-                    cryptoKeys.privateKey,
-                });
-              } catch (error) {
-                console.error(
-                  "Не удалось расшифровать сообщение:",
-                  error
-                );
+            try {
+              text = await decryptMessage({
+                ciphertext: message.ciphertext,
+                iv: message.iv,
+                currentUserId: currentUser.id,
+                privateKey: cryptoKeys.privateKey,
+              });
+            } catch (error) {
+              console.error(
+                "Не удалось расшифровать сообщение:",
+                error
+              );
 
-                text =
-                  "Не удалось расшифровать сообщение";
-              }
+              text = "Не удалось расшифровать сообщение";
+            }
 
-              const isOwn =
-                message.sender_id ===
-                currentUser.id;
+            const isOwn =
+              message.sender_id === currentUser.id;
 
-              return {
-                id: message.id,
-                author: isOwn
-                  ? currentUser.username
-                  : selectedChatName,
-                text,
-                time: formatTime(
-                  message.created_at
-                ),
-                isOwn,
-              };
-            })
-          );
+            return {
+              id: message.id,
+              author: isOwn
+                ? currentUser.username
+                : selectedChatName,
+              text,
+              time: formatTime(message.created_at),
+              isOwn,
+            };
+          })
+        );
+
+        if (isCancelled) {
+          return;
+        }
 
         setChats((previousChats) =>
           previousChats.map((chat) => {
@@ -560,12 +565,23 @@ function App() {
               return chat;
             }
 
-            const lastMessage =
-              preparedMessages.at(-1);
+            const loadedMessageIds = new Set(
+              preparedMessages.map((message) => message.id)
+            );
+
+            const mergedMessages = [
+              ...preparedMessages,
+              ...chat.messages.filter(
+                (message) =>
+                  !loadedMessageIds.has(message.id)
+              ),
+            ];
+
+            const lastMessage = mergedMessages.at(-1);
 
             return {
               ...chat,
-              messages: preparedMessages,
+              messages: mergedMessages,
               lastMessage:
                 lastMessage?.text ??
                 "Сообщений пока нет",
@@ -573,13 +589,20 @@ function App() {
             };
           })
         );
+
         setLoadedMessagesChatId(selectedChatId);
       } catch (error) {
-        setAppError(error.message);
+        if (!isCancelled) {
+          setAppError(error.message);
+        }
       }
     }
 
     loadMessages();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
     token,
     currentUser,
@@ -594,134 +617,158 @@ function App() {
       return;
     }
 
-    const socket = createMessageSocket(token, {
-      async onMessageCreated(backendMessage) {
-        if (
-          backendMessage.sender_id ===
-          currentUser.id
-        ) {
-          return;
-        }
+    let isCancelled = false;
+    let socket = null;
+    let reconnectTimer = null;
 
-        let text;
+    function connect() {
+      if (isCancelled) {
+        return;
+      }
+      const socket = createMessageSocket(token, {
+        async onMessageCreated(backendMessage) {
+          if (
+            backendMessage.sender_id ===
+            currentUser.id
+          ) {
+            return;
+          }
 
-        try {
-          text = await decryptMessage({
-            ciphertext:
-              backendMessage.ciphertext,
-            iv: backendMessage.iv,
-            currentUserId: currentUser.id,
-            privateKey: cryptoKeys.privateKey,
-          });
-        } catch (error) {
-          console.error(
-            "Ошибка расшифровки WebSocket-сообщения:",
-            error
-          );
+          let text;
 
-          text =
-            "Не удалось расшифровать сообщение";
-        }
-
-        const chatsResponse =
-          await getChats(token);
-
-        const backendChats = Array.isArray(
-          chatsResponse
-        )
-          ? chatsResponse
-          : chatsResponse.chats ?? [];
-
-        const serverChats =
-          backendChats.map(convertBackendChat);
-
-        const incomingChat =
-          serverChats.find(
-            (chat) =>
-              chat.id === backendMessage.chat_id
-          );
-
-        setChats((previousChats) => {
-          const existingChat =
-            previousChats.find(
-              (chat) =>
-                chat.id ===
-                backendMessage.chat_id
-            );
-
-          const targetChat =
-            existingChat ?? incomingChat;
-
-          if (!targetChat) {
+          try {
+            text = await decryptMessage({
+              ciphertext:
+                backendMessage.ciphertext,
+              iv: backendMessage.iv,
+              currentUserId: currentUser.id,
+              privateKey: cryptoKeys.privateKey,
+            });
+          } catch (error) {
             console.error(
-              "Входящий чат не найден:",
-              backendMessage.chat_id
+              "Ошибка расшифровки WebSocket-сообщения:",
+              error
             );
 
-            return previousChats;
+            text =
+              "Не удалось расшифровать сообщение";
           }
 
-          const alreadyExists =
-            targetChat.messages.some(
-              (message) =>
-                message.id ===
-                backendMessage.id
+          const chatsResponse =
+            await getChats(token);
+
+          const backendChats = Array.isArray(
+            chatsResponse
+          )
+            ? chatsResponse
+            : chatsResponse.chats ?? [];
+
+          const serverChats =
+            backendChats.map(convertBackendChat);
+
+          const incomingChat =
+            serverChats.find(
+              (chat) =>
+                chat.id === backendMessage.chat_id
             );
 
-          if (alreadyExists) {
-            return previousChats;
-          }
+          setChats((previousChats) => {
+            const existingChat =
+              previousChats.find(
+                (chat) =>
+                  chat.id ===
+                  backendMessage.chat_id
+              );
 
-          const preparedMessage = {
-            id: backendMessage.id,
-            author: targetChat.name,
-            text,
-            time: formatTime(
-              backendMessage.created_at
-            ),
-            isOwn: false,
-          };
+            const targetChat =
+              existingChat ?? incomingChat;
 
-          const updatedChat = {
-            ...targetChat,
-            lastMessage: preparedMessage.text,
-            time: preparedMessage.time,
-            messages: [
-              ...targetChat.messages,
-              preparedMessage,
-            ],
-          };
+            if (!targetChat) {
+              console.error(
+                "Входящий чат не найден:",
+                backendMessage.chat_id
+              );
 
-          if (!existingChat) {
+              return previousChats;
+            }
+
+            const alreadyExists =
+              targetChat.messages.some(
+                (message) =>
+                  message.id ===
+                  backendMessage.id
+              );
+
+            if (alreadyExists) {
+              return previousChats;
+            }
+
+            const preparedMessage = {
+              id: backendMessage.id,
+              author: targetChat.name,
+              text,
+              time: formatTime(
+                backendMessage.created_at
+              ),
+              isOwn: false,
+            };
+
+            const updatedChat = {
+              ...targetChat,
+              lastMessage: preparedMessage.text,
+              time: preparedMessage.time,
+              messages: [
+                ...targetChat.messages,
+                preparedMessage,
+              ],
+            };
+
+            if (!existingChat) {
+              return [
+                updatedChat,
+                ...previousChats,
+              ];
+            }
+
             return [
               updatedChat,
-              ...previousChats,
+              ...previousChats.filter(
+                (chat) =>
+                  chat.id !== updatedChat.id
+              ),
             ];
+          });
+        },
+        
+        onMessageDeleted({ chatId, messageId }) {
+          setChats((previousChats) =>
+            removeMessageFromChats(
+              previousChats,
+              chatId,
+              messageId
+            )
+          );
+        },
+
+        onClose() {
+          if (isCancelled || reconnectTimer) {
+            return;
           }
 
-          return [
-            updatedChat,
-            ...previousChats.filter(
-              (chat) =>
-                chat.id !== updatedChat.id
-            ),
-          ];
-        });
-      },
-      
-      onMessageDeleted({ chatId, messageId }) {
-        setChats((previousChats) =>
-          removeMessageFromChats(
-            previousChats,
-            chatId,
-            messageId
-          )
-        );
-      },
-    });
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, 2000);
+        },
+      });
+    }
+
+    connect();
 
     return () => {
-      socket.close();
+      isCancelled = true;
+      clearTimeout(reconnectTimer);
+      socket?.close();
     };
   }, [
     token,
@@ -832,7 +879,7 @@ function App() {
     );
 
     try {
-      setAppError("");
+      setActionError("");
 
       const recipientKeyData =
         await getUserPublicKey(
@@ -911,7 +958,7 @@ function App() {
         })
       );
 
-      setAppError(error.message);
+      setActionError(error.message);
       throw error;
     }
   }
@@ -927,13 +974,13 @@ function App() {
 
   function handleLogout() {
     localStorage.removeItem("accessToken");
-
     setToken(null);
     setCurrentUser(null);
     setCryptoKeys(null);
     setChats([]);
     setSelectedChatId(null);
     setAppError("");
+    setActionError("");
     setLoadedMessagesChatId(null);
     setMessagePendingDeletion(null);
     setIsMobileChatOpen(false);
@@ -961,7 +1008,7 @@ function App() {
 
     try {
       setIsDeletingMessage(true);
-      setAppError("");
+      setActionError("");
 
       await deleteMessageRequest(
         token,
@@ -984,7 +1031,7 @@ function App() {
         error
       );
 
-      setAppError(error.message);
+      setActionError(error.message);
     } finally {
       setIsDeletingMessage(false);
     }
@@ -1076,9 +1123,8 @@ function App() {
             chat={selectedChat}
             onBack={handleBackToChats}
             onSendMessage={handleSendMessage}
-            onDeleteMessage={
-              handleDeleteMessage
-            }
+            onDeleteMessage={handleDeleteMessage}
+            error={actionError}
           />
         )}
       </div>
