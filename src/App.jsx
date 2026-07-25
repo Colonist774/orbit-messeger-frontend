@@ -530,6 +530,10 @@ function App() {
           ? response
           : response.messages ?? [];
 
+        if (isCancelled) {
+          return;
+        }
+
         setHasMoreMessages(
           Array.isArray(response)
             ? false
@@ -542,16 +546,12 @@ function App() {
             : response.next_before_id
         );
 
-        if (isCancelled) {
-          return;
-        }
-
         if (!selectedChatName) {
           return;
         }
 
         const preparedMessages = await Promise.all(
-          response.messages.map(async (message) => {
+          backendMessages.map(async (message) => {
             let text;
 
             try {
