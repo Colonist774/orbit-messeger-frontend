@@ -14,9 +14,17 @@ async function readError(response) {
   return data?.detail || "Ошибка запроса";
 }
 
-export async function getMessages(token, chatId) {
+export async function getMessages(token, chatId, beforeMessageId = null, limit = 50) {
+  const params = new URLSearchParams();
+
+  params.set("limit", limit);
+
+  if (beforeMessageId !== null) {
+    params.set("before_id", beforeMessageId);
+  }
+
   const response = await fetch(
-    `${API_URL}/api/chats/${chatId}/messages`,
+    `${API_URL}/api/chats/${chatId}/messages?${params}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,

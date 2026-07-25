@@ -14,7 +14,10 @@ function ChatWindow({     //принимаем:
   onBack,                       //возврат к списку чатов на мобильном
   onSendMessage,                //функцию - отправка сообщений
   onDeleteMessage,              //функцию - удаление сообщений
-  error                         //ошибка при отправке или удалении сообщений
+  error,                        //ошибка при отправке или удалении сообщений
+  hasMoreMessages,              //есть ли более старые сообщения для загрузки
+  isLoadingOlderMessages,       //идет ли процесс загрузки более старых сообщений
+  onLoadOlderMessages           //функция - загрузка более старых сообщений
 }) {
 
   const [text, setText] = useState("")      //для приема данных из input
@@ -91,11 +94,22 @@ function ChatWindow({     //принимаем:
         <div className="avatar">
           {chat.name[0]}
         </div>
-
         <div>
           <h2>{chat.name}</h2>
           <span>{chat.status}</span>
         </div>
+
+        {hasMoreMessages && (
+          <button
+            type="button"
+            onClick={onLoadOlderMessages}
+            disabled={isLoadingOlderMessages}
+          >
+            {isLoadingOlderMessages
+              ? "Загрузка..."
+              : "Загрузить предыдущие сообщения"}
+          </button>
+        )}
 
         <div className="chat-actions">
           <button type="button" aria-label="Поиск">

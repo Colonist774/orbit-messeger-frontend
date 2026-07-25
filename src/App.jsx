@@ -142,8 +142,17 @@ function App() {
   const [isMobileChatOpen, setIsMobileChatOpen] = //флаг открытия чата на мобильном устройствеg
     useState(false);
 
-  const [messagesReloadKey, setMessagesReloadKey] =
+  const [messagesReloadKey, setMessagesReloadKey] = //флаг для перезагрузки сообщений при повторном подключении WebSocket
     useState(0);
+
+  const [hasMoreMessages, setHasMoreMessages] = //флаг наличия более старых сообщений для загрузки
+    useState(false);
+
+  const [nextBeforeId, setNextBeforeId] = //id сообщения, до которого нужно загружать более старые сообщения
+    useState(null);
+
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = //флаг загрузки более старых сообщений
+    useState(false);
 
   const selectedChat = chats.find(
     (chat) => chat.id === selectedChatId
@@ -201,7 +210,9 @@ function App() {
             try {
               const response = await getMessages(
                 token,
-                chat.id
+                chat.id,
+                null,
+                1
               );
 
               const lastBackendMessage =
@@ -515,6 +526,22 @@ function App() {
           selectedChatId
         );
 
+        const backendMessages = Array.isArray(response)
+          ? response
+          : response.messages ?? [];
+
+        setHasMoreMessages(
+          Array.isArray(response)
+            ? false
+            : response.has_more
+        );
+
+        setNextBeforeId(
+          Array.isArray(response)
+            ? null
+            : response.next_before_id
+        );
+
         if (isCancelled) {
           return;
         }
@@ -614,6 +641,73 @@ function App() {
     selectedChatName,
     messagesReloadKey,
   ]);
+
+  // Загрузка более старых сообщений при скролле вверх.
+  async function handleLoadOlderMessages() {
+    if (
+      !token ||
+      !selectedChatId ||
+      !nextBeforeId ||
+      !hasMoreMessages ||
+      isLoadingOlderMessages
+    ) {
+      return;
+    }
+
+    setIsLoadingOlderMessages(true);
+    setActionError("");
+
+    try {
+      const response = await getMessages(
+        token,
+        selectedChatId,
+        nextBeforeId
+      );
+
+      const backendMessages = response.messages ?? [];
+
+      // Здесь расшифровываем их так же,
+      // как при первой загрузке.
+      const preparedMessages = await Promise.all(
+        backendMessages.map(async (message) => {
+          // твой существующий код подготовки сообщения
+        })
+      );
+
+      setChats((previousChats) =>
+        previousChats.map((chat) => {
+          if (chat.id !== selectedChatId) {
+            return chat;
+          }
+
+          const existingIds = new Set(
+            chat.messages.map((message) => message.id)
+          );
+
+          const uniqueOlderMessages =
+            preparedMessages.filter(
+              (message) =>
+                !existingIds.has(message.id)
+            );
+
+          return {
+            ...chat,
+            messages: [
+              ...uniqueOlderMessages,
+              ...chat.messages,
+            ],
+          };
+        })
+      );
+
+      setHasMoreMessages(response.has_more);
+      setNextBeforeId(response.next_before_id);
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  }
 
   // Получение и расшифровка новых сообщений.
   useEffect(() => {
@@ -1140,6 +1234,9 @@ function App() {
             onSendMessage={handleSendMessage}
             onDeleteMessage={handleDeleteMessage}
             error={actionError}
+            hasMoreMessages={hasMoreMessages}
+            isLoadingOlderMessages={isLoadingOlderMessages}
+            onLoadOlderMessages={handleLoadOlderMessages}
           />
         )}
       </div>
