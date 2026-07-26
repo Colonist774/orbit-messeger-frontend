@@ -52,7 +52,7 @@ function formatTime(dateString) {
   });
 }
 
-function convertBackendChat(chat) {
+function convertBackendChat(chat) {     // Преобразование данных чата из формата бэкенда в формат фронтенда
   return {
     id: chat.id,
     name: chat.other_user.username,
@@ -60,6 +60,7 @@ function convertBackendChat(chat) {
     status: "Online",
     lastMessage: "Сообщений пока нет",
     time: "",
+    lastMessageAt: null,
     messages: [],
   };
 }
@@ -91,6 +92,8 @@ function removeMessageFromChats(
         lastMessage?.text ??
         "Сообщений пока нет",
       time: lastMessage?.time ?? "",
+      lastMessageAt:
+        lastMessage?.createdAt ?? null,
     };
   });
 }
@@ -233,6 +236,7 @@ function App() {
                   lastMessage:
                     "Сообщений пока нет",
                   time: "",
+                  lastMessageAt: null,
                 };
               }
 
@@ -259,7 +263,9 @@ function App() {
                 time: formatTime(
                   lastBackendMessage.created_at
                 ),
-              };
+                lastMessageAt:
+                  lastBackendMessage.created_at,
+                };
             } catch (error) {
               console.error(
                 `Не удалось загрузить превью чата ${chatId}:`,
@@ -288,9 +294,9 @@ function App() {
 
             return {
               ...chat,
-              lastMessage:
-                preview.lastMessage,
+              lastMessage: preview.lastMessage,
               time: preview.time,
+              lastMessageAt: preview.lastMessageAt,
             };
           })
         );
@@ -586,6 +592,7 @@ function App() {
                 : selectedChatName,
               text,
               time: formatTime(message.created_at),
+              createdAt: message.created_at,
               isOwn,
             };
           })
@@ -622,6 +629,8 @@ function App() {
                 lastMessage?.text ??
                 "Сообщений пока нет",
               time: lastMessage?.time ?? "",
+              lastMessageAt:
+                lastMessage?.createdAt ?? null,
             };
           })
         );
@@ -707,6 +716,7 @@ function App() {
               : selectedChatName,
             text,
             time: formatTime(message.created_at),
+            createdAt: message.created_at,
             isOwn,
           };
         })
@@ -879,6 +889,8 @@ function App() {
               time: formatTime(
                 backendMessage.created_at
               ),
+              createdAt:
+                backendMessage.created_at,
               isOwn: false,
             };
 
@@ -886,6 +898,8 @@ function App() {
               ...targetChat,
               lastMessage: preparedMessage.text,
               time: preparedMessage.time,
+              lastMessageAt:
+                preparedMessage.createdAt,
               messages: [
                 ...targetChat.messages,
                 preparedMessage,
@@ -1014,17 +1028,15 @@ function App() {
     const temporaryId =
       `temporary-${Date.now()}`;
 
+    const temporaryCreatedAt =
+      new Date().toISOString();
+
     const temporaryMessage = {
       id: temporaryId,
       author: currentUser.username,
       text,
-      time: new Date().toLocaleTimeString(
-        [],
-        {
-          hour: "2-digit",
-          minute: "2-digit",
-        }
-      ),
+      time: formatTime(temporaryCreatedAt),
+      createdAt: temporaryCreatedAt,
       isOwn: true,
       isSending: true,
     };
@@ -1039,6 +1051,8 @@ function App() {
           ...currentChat,
           lastMessage: text,
           time: temporaryMessage.time,
+          lastMessageAt:
+            temporaryMessage.createdAt,
           messages: [
             ...currentChat.messages,
             temporaryMessage,
@@ -1091,6 +1105,8 @@ function App() {
             time: formatTime(
               backendMessage.created_at
             ),
+            createdAt:
+              backendMessage.created_at,
             isSending: false,
           };
 
@@ -1099,6 +1115,8 @@ function App() {
             lastMessage:
               savedMessage.text,
             time: savedMessage.time,
+            lastMessageAt:
+              savedMessage.createdAt,
             messages:
               currentChat.messages.map(
                 (message) =>
@@ -1216,6 +1234,30 @@ function App() {
     setMessagePendingDeletion(null);
   }
 
+  const sortedChats = [...chats].sort(
+    (firstChat, secondChat) => {
+      if (
+        !firstChat.lastMessageAt &&
+        !secondChat.lastMessageAt
+      ) {
+        return 0;
+      }
+
+      if (!firstChat.lastMessageAt) {
+        return 1;
+      }
+
+      if (!secondChat.lastMessageAt) {
+        return -1;
+      }
+
+      return (
+        new Date(secondChat.lastMessageAt) -
+        new Date(firstChat.lastMessageAt)
+      );
+    }
+  );
+
   if (isCheckingAuth || isPreparingCrypto) {
     return (
       <main className="auth-page">
@@ -1243,7 +1285,7 @@ function App() {
       }`}
     >
       <LeftSidebar
-        chats={chats}
+        chats={sortedChats}
         selectedChatId={selectedChatId}
         onSelectChat={handleSelectChat}
         currentUser={currentUser}
