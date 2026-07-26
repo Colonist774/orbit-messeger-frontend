@@ -1424,7 +1424,17 @@ function App() {
     }
   );
 
-  if (isCheckingAuth || isPreparingCrypto) {
+if (
+  isCheckingAuth ||
+  isPreparingCrypto ||
+  (
+    token &&
+    currentUser &&
+    !cryptoKeys &&
+    !appError
+  )
+
+  ) {
     return (
       <main className="auth-page">
         <p>
@@ -1512,7 +1522,7 @@ function App() {
             imageAccess={{
               token,
               currentUserId: currentUser.id,
-              privateKey: cryptoKeys.privateKey,
+              privateKey: cryptoKeys?.privateKey ?? null,
             }}
           />
         )}
