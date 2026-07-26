@@ -83,3 +83,73 @@ export async function deleteMessage(
     throw new Error(await readError(response));
   }
 }
+
+export async function sendImageMessage(
+  token,
+  chatId,
+  {
+    encryptedFile,
+    ciphertext,
+    iv,
+    keyVersion,
+    mimeType,
+    width,
+    height,
+  }
+) {
+  const formData = new FormData();
+
+  formData.append(
+    "file",
+    encryptedFile,
+    "image.enc"
+  );
+  formData.append("ciphertext", ciphertext);
+  formData.append("iv", iv);
+  formData.append(
+    "key_version",
+    String(keyVersion)
+  );
+  formData.append("mime_type", mimeType);
+  formData.append("width", String(width));
+  formData.append("height", String(height));
+
+  const response = await fetch(
+    `${API_URL}/api/chats/${chatId}/image-messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json();
+}
+
+
+export async function getImageAttachment(
+  token,
+  chatId,
+  messageId
+) {
+  const response = await fetch(
+    `${API_URL}/api/chats/${chatId}/messages/${messageId}/attachment`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.arrayBuffer();
+}

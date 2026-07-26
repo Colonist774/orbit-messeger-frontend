@@ -346,3 +346,155 @@ export async function decryptMessage({
 
   return new TextDecoder().decode(decryptedText);
 }
+
+// Шифрует бинарный файл отдельным AES-GCM-ключом.
+// Сам AES-ключ шифруется RSA-ключом каждого участника чата.
+export async function encryptFile({
+  file,
+  publicKeys,
+}) {
+  const aesKey = await crypto.subtle.generateKey(
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+
+  const iv = crypto.getRandomValues(
+    new Uint8Array(12)
+  );
+
+  const fileBuffer = await file.arrayBuffer();
+
+  const encryptedFileBuffer =
+    await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+      },
+      aesKey,
+      fileBuffer
+    );
+
+  const rawAesKey = await crypto.subtle.exportKey(
+    "raw",
+    aesKey
+  );
+
+  const encryptedKeys = {};
+
+  for (const [userId, publicKey] of Object.entries(
+    publicKeys
+  )) {
+    const encryptedAesKey =
+      await crypto.subtle.encrypt(
+        {
+          name: "RSA-OAEP",
+        },
+        publicKey,
+        rawAesKey
+      );
+
+    encryptedKeys[userId] =
+      arrayBufferToBase64(encryptedAesKey);
+  }
+
+  const payload = {
+    version: 1,
+    algorithm: "AES-GCM+RSA-OAEP",
+    kind: "file",
+    keys: encryptedKeys,
+  };
+
+  return {
+    encryptedFile: new Blob(
+      [encryptedFileBuffer],
+      {
+        type: "application/octet-stream",
+      }
+    ),
+    ciphertext: JSON.stringify(payload),
+    iv: arrayBufferToBase64(iv),
+    key_version: 1,
+  };
+}
+
+
+// Расшифровывает скачанные бинарные данные и возвращает Blob,
+// который браузер уже может показать через URL.createObjectURL.
+export async function decryptFile({
+  encryptedBuffer,
+  ciphertext,
+  iv,
+  currentUserId,
+  privateKey,
+  mimeType,
+}) {
+  let payload;
+
+  try {
+    payload = JSON.parse(ciphertext);
+  } catch {
+    throw new Error(
+      "Не удалось прочитать данные шифрования изображения"
+    );
+  }
+
+  if (
+    payload.version !== 1 ||
+    payload.kind !== "file" ||
+    !payload.keys
+  ) {
+    throw new Error(
+      "Неподдерживаемый формат зашифрованного изображения"
+    );
+  }
+
+  const encryptedAesKey =
+    payload.keys[String(currentUserId)];
+
+  if (!encryptedAesKey) {
+    throw new Error(
+      "Изображение не зашифровано для текущего пользователя"
+    );
+  }
+
+  const rawAesKey = await crypto.subtle.decrypt(
+    {
+      name: "RSA-OAEP",
+    },
+    privateKey,
+    base64ToArrayBuffer(encryptedAesKey)
+  );
+
+  const aesKey = await crypto.subtle.importKey(
+    "raw",
+    rawAesKey,
+    {
+      name: "AES-GCM",
+    },
+    false,
+    ["decrypt"]
+  );
+
+  const decryptedBuffer =
+    await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: new Uint8Array(
+          base64ToArrayBuffer(iv)
+        ),
+      },
+      aesKey,
+      encryptedBuffer
+    );
+
+  return new Blob(
+    [decryptedBuffer],
+    {
+      type: mimeType,
+    }
+  );
+}

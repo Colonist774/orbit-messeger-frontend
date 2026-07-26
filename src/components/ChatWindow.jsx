@@ -1,51 +1,106 @@
-// отвечает за окно чата, отображение сообщений, отправку сообщений, удаление сообщений
-// и возврат к списку чатов на мобильных устройствах.
-
+// отвечает за окно чата, отображение сообщений, отправку текста и изображений,
+// удаление сообщений и возврат к списку чатов на мобильных устройствах.
 
 import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
-  useLayoutEffect
 } from "react";
 import Message from "./Message";
 
-function ChatWindow({     //принимаем:
-  chat,                         //Выбранный чат (состояние)
-  onBack,                       //возврат к списку чатов на мобильном
-  onSendMessage,                //функцию - отправка сообщений
-  onDeleteMessage,              //функцию - удаление сообщений
-  error,                        //ошибка при отправке или удалении сообщений
-  hasMoreMessages,              //есть ли более старые сообщения для загрузки
-  isLoadingOlderMessages,       //идет ли процесс загрузки более старых сообщений
-  onLoadOlderMessages           //функция - загрузка более старых сообщений
-}) {
 
-  const [text, setText] = useState("");      //для приема данных из input
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+
+
+function getImageDimensions(previewUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => {
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      });
+    };
+
+    image.onerror = () => {
+      reject(
+        new Error("Не удалось прочитать изображение")
+      );
+    };
+
+    image.src = previewUrl;
+  });
+}
+
+
+function ChatWindow({
+  chat,
+  onBack,
+  onSendMessage,
+  onSendImage,
+  onDeleteMessage,
+  error,
+  hasMoreMessages,
+  isLoadingOlderMessages,
+  onLoadOlderMessages,
+  imageAccess,
+}) {
+  const [text, setText] = useState("");
+  const [selectedImage, setSelectedImage] =
+    useState(null);
+  const [imageSelectionError, setImageSelectionError] =
+    useState("");
+  const [isSending, setIsSending] = useState(false);
+
   const isSendingRef = useRef(false);
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  //невидимый элемент, при появлении которого заранее загружаются старые сообщения
+  // Невидимый элемент, при появлении которого заранее
+  // загружаются старые сообщения.
   const loadTriggerRef = useRef(null);
 
-  //хранит конкретное видимое сообщение и его позицию перед загрузкой старых сообщений
+  // Хранит конкретное видимое сообщение и его позицию
+  // перед загрузкой старых сообщений.
   const loadAnchorRef = useRef(null);
 
   const lastMessageId =
     chat?.messages.at(-1)?.id;
 
-  //при открытии другого чата или появлении нового сообщения прокручиваем чат вниз
+  const selectedImageUrl =
+    selectedImage?.previewUrl ?? "";
+
+  // Освобождаем временный blob URL при замене картинки
+  // или закрытии текущего окна чата.
+  useEffect(() => {
+    return () => {
+      if (selectedImageUrl) {
+        URL.revokeObjectURL(selectedImageUrl);
+      }
+    };
+  }, [selectedImageUrl]);
+
+  // При открытии другого чата или появлении нового
+  // сообщения прокручиваем чат вниз.
   useLayoutEffect(() => {
     messagesEndRef.current?.scrollIntoView({
       behavior: "auto",
     });
   }, [chat?.id, lastMessageId]);
 
-  //после загрузки старых сообщений возвращаем то же видимое сообщение
-  //на ту же позицию, на которой оно было до загрузки
+  // После загрузки старых сообщений возвращаем то же
+  // видимое сообщение на прежнюю позицию.
   useLayoutEffect(() => {
     const anchor = loadAnchorRef.current;
     const messageList = messageListRef.current;
@@ -77,7 +132,8 @@ function ChatWindow({     //принимаем:
     loadAnchorRef.current = null;
   }, [chat?.messages.length]);
 
-  //загрузка более старых сообщений и сохранение позиции прокрутки
+  // Загрузка более старых сообщений и сохранение
+  // позиции прокрутки.
   const loadOlderMessagesAndKeepPosition =
     useCallback(async () => {
       const messageList = messageListRef.current;
@@ -99,7 +155,6 @@ function ChatWindow({     //принимаем:
       const containerTop =
         messageList.getBoundingClientRect().top;
 
-      //находим первое сообщение, которое сейчас хотя бы частично видно
       const firstVisibleMessage =
         messageElements.find((element) => {
           const messageRect =
@@ -120,13 +175,12 @@ function ChatWindow({     //принимаем:
 
       try {
         await onLoadOlderMessages();
-      } catch (error) {
-        //если загрузка не удалась, сохраненный якорь больше не нужен
+      } catch (loadError) {
         loadAnchorRef.current = null;
 
         console.error(
           "Ошибка загрузки старых сообщений:",
-          error
+          loadError
         );
       }
     }, [
@@ -135,8 +189,9 @@ function ChatWindow({     //принимаем:
       onLoadOlderMessages,
     ]);
 
-  //следим за невидимым элементом возле начала загруженных сообщений
-  //и заранее загружаем следующую порцию
+  // Следим за невидимым элементом возле начала
+  // загруженных сообщений и заранее загружаем следующую
+  // порцию.
   useEffect(() => {
     const trigger = loadTriggerRef.current;
     const messageList = messageListRef.current;
@@ -177,53 +232,152 @@ function ChatWindow({     //принимаем:
     loadOlderMessagesAndKeepPosition,
   ]);
 
-  //меняем состояниие text
   function handleChange(event) {
-    setText(event.target.value);       //используем setter, присваиваем значение text из input
+    setText(event.target.value);
   }
 
-  //отправка сообщений
+  function clearSelectedImage() {
+    setSelectedImage((previousImage) => {
+      if (previousImage?.previewUrl) {
+        URL.revokeObjectURL(
+          previousImage.previewUrl
+        );
+      }
+
+      return null;
+    });
+
+    setImageSelectionError("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleImageSelection(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setImageSelectionError("");
+
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      setImageSelectionError(
+        "Можно отправлять только JPEG, PNG и WebP"
+      );
+      input.value = "";
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setImageSelectionError(
+        "Размер изображения не должен превышать 10 МБ"
+      );
+      input.value = "";
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+
+    try {
+      const dimensions =
+        await getImageDimensions(previewUrl);
+
+      setSelectedImage((previousImage) => {
+        if (previousImage?.previewUrl) {
+          URL.revokeObjectURL(
+            previousImage.previewUrl
+          );
+        }
+
+        return {
+          file,
+          previewUrl,
+          width: dimensions.width,
+          height: dimensions.height,
+        };
+      });
+
+      setText("");
+    } catch (selectionError) {
+      URL.revokeObjectURL(previewUrl);
+      setImageSelectionError(
+        selectionError.message
+      );
+    } finally {
+      input.value = "";
+    }
+  }
+
+  // Одна форма отправляет либо выбранное изображение,
+  // либо обычный текст.
   async function sendMessage(event) {
     event.preventDefault();
 
     const preparedText = text.trim();
 
     if (
-      preparedText === "" ||
+      (!selectedImage && preparedText === "") ||
       isSendingRef.current
     ) {
       return;
     }
 
     isSendingRef.current = true;
-    setText("");
+    setIsSending(true);
+
+    if (!selectedImage) {
+      setText("");
+    }
 
     try {
-      await onSendMessage(
-        chat.id,
-        preparedText
-      );
-    } catch (error) {
+      if (selectedImage) {
+        await onSendImage(
+          chat.id,
+          selectedImage.file,
+          {
+            width: selectedImage.width,
+            height: selectedImage.height,
+          }
+        );
+
+        clearSelectedImage();
+      } else {
+        await onSendMessage(
+          chat.id,
+          preparedText
+        );
+      }
+    } catch (sendError) {
       console.error(
         "Ошибка отправки сообщения:",
-        error
+        sendError
       );
 
-      // Возвращаем текст, если отправка провалилась
-      setText(preparedText);
+      if (!selectedImage) {
+        setText(preparedText);
+      }
     } finally {
       isSendingRef.current = false;
+      setIsSending(false);
     }
   }
 
-
-  if (!chat) {      //если чат не выбран и переменная chat имеет значение 0, выводим "Выберите чат"
+  if (!chat) {
     return (
       <main className="empty-chat">
-        <p className="empty-message">Выберите чат</p>
+        <p className="empty-message">
+          Выберите чат
+        </p>
       </main>
     );
   }
+
+  const displayedError =
+    imageSelectionError || error;
 
   return (
     <main className="chat-window">
@@ -272,12 +426,12 @@ function ChatWindow({     //принимаем:
           </p>
         )}
 
-        {chat.messages.length === 0 ? (         //если в чате нет сообщений, выводим "Сообщений пока нет"
+        {chat.messages.length === 0 ? (
           <p className="empty-message">
             Сообщений пока нет
           </p>
-        ) : (                                   //если сообщения есть:
-          chat.messages.map((message, index) => (          //передаем значения каждого элемента - сообщения из текущего чата чата
+        ) : (
+          chat.messages.map((message, index) => (
             <Fragment key={message.id}>
               {index === 10 && (
                 <div
@@ -289,10 +443,14 @@ function ChatWindow({     //принимаем:
 
               <Message
                 messageId={message.id}
+                chatId={chat.id}
                 author={message.author}
                 text={message.text}
                 time={message.time}
+                type={message.type}
+                image={message.image}
                 isOwn={message.isOwn}
+                imageAccess={imageAccess}
                 canDelete={
                   message.isOwn &&
                   !message.isSending
@@ -311,54 +469,107 @@ function ChatWindow({     //принимаем:
         <div ref={messagesEndRef} />
       </section>
 
-      {error && (
-        <div
-          className="chat-action-error"
-          role="alert"
+      <div className="chat-composer">
+        {displayedError && (
+          <div
+            className="chat-action-error"
+            role="alert"
+          >
+            <span className="chat-action-error-icon">
+              !
+            </span>
+
+            <span>{displayedError}</span>
+          </div>
+        )}
+
+        {selectedImage && (
+          <div className="image-composer-preview">
+            <img
+              src={selectedImage.previewUrl}
+              alt="Предпросмотр выбранного изображения"
+            />
+
+            <div className="image-composer-preview__info">
+              <strong>
+                {selectedImage.file.name}
+              </strong>
+
+              <span>
+                {(selectedImage.file.size / 1024 / 1024)
+                  .toFixed(1)} МБ
+              </span>
+            </div>
+
+            <button
+              className="image-composer-preview__remove"
+              type="button"
+              onClick={clearSelectedImage}
+              aria-label="Убрать выбранное изображение"
+              title="Убрать изображение"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <form
+          className="message-form"
+          onSubmit={sendMessage}
         >
-          <span className="chat-action-error-icon">
-            !
-          </span>
+          <input
+            ref={fileInputRef}
+            className="message-file-input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleImageSelection}
+          />
 
-          <span>{error}</span>
-        </div>
-      )}
+          <button
+            className="attachment-button"
+            type="button"
+            onClick={() =>
+              fileInputRef.current?.click()
+            }
+            aria-label="Добавить изображение"
+            title="Добавить изображение"
+            disabled={isSending}
+          >
+            ＋
+          </button>
 
-      <form
-        className="message-form"
-        onSubmit={sendMessage}
-      >
-        <button
-          type="button"
-          aria-label="Добавить файл"
-        >
-          ＋
-        </button>
+          <input
+            type="text"
+            value={text}
+            onChange={handleChange}
+            placeholder={
+              selectedImage
+                ? "Изображение выбрано"
+                : "Напишите сообщение..."
+            }
+            autoComplete="off"
+            enterKeyHint="send"
+            disabled={Boolean(selectedImage) || isSending}
+          />
 
-        <input                        //ввод текста сообщения
-          type="text"
-          value={text}                //добавляем один источник текста - состояние text, input всегда отображает значение из text
-          onChange={handleChange}     //При изменение значения в input, передаем его в функцию для изменения text
-          placeholder="Напишите сообщение..."
-          autoComplete="off"
-          enterKeyHint="send"
-        />
+          <button
+            className="voice-message-button"
+            type="button"
+            aria-label="Записать голосовое сообщение"
+          >
+            🎙
+          </button>
 
-        <button
-          type="button"
-          aria-label="Записать голосовое сообщение"
-        >
-          🎙
-        </button>
-
-        <button
-          className="send-button"
-          type="submit"
-          aria-label="Отправить сообщение"
-        >
-          ➤
-        </button>
-      </form>
+          <button
+            className="send-button"
+            type="submit"
+            aria-label="Отправить сообщение"
+            disabled={isSending}
+          >
+            ➤
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

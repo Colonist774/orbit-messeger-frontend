@@ -17,6 +17,7 @@ import {
 import {
   getMessages,
   sendMessage as sendMessageRequest,
+  sendImageMessage as sendImageMessageRequest,
   deleteMessage as deleteMessageRequest,
 } from "./api/messages";
 
@@ -32,6 +33,7 @@ import {
   importPublicKey,
   encryptMessage,
   decryptMessage,
+  encryptFile,
   encryptPrivateKeyBackup,
   decryptPrivateKeyBackup,
 } from "./utils/crypto";
@@ -50,6 +52,84 @@ function formatTime(dateString) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getBackendMessageType(message) {
+  return message.message_type === "image"
+    ? "image"
+    : "text";
+}
+
+function getMessagePreview(message) {
+  if (!message) {
+    return "Сообщений пока нет";
+  }
+
+  return message.type === "image"
+    ? "📷 Изображение"
+    : message.text;
+}
+
+function getBackendImageData(message) {
+  if (
+    getBackendMessageType(message) !== "image" ||
+    !message.attachment
+  ) {
+    return null;
+  }
+
+  return {
+    ciphertext: message.ciphertext,
+    iv: message.iv,
+    mimeType: message.attachment.mime_type,
+    sizeBytes: message.attachment.size_bytes,
+    width: message.attachment.width,
+    height: message.attachment.height,
+  };
+}
+
+async function prepareBackendMessage({
+  message,
+  currentUser,
+  otherUserName,
+  privateKey,
+}) {
+  const type = getBackendMessageType(message);
+  const isOwn =
+    message.sender_id === currentUser.id;
+
+  let text = "";
+
+  if (type === "text") {
+    try {
+      text = await decryptMessage({
+        ciphertext: message.ciphertext,
+        iv: message.iv,
+        currentUserId: currentUser.id,
+        privateKey,
+      });
+    } catch (error) {
+      console.error(
+        "Не удалось расшифровать сообщение:",
+        error
+      );
+
+      text = "Не удалось расшифровать сообщение";
+    }
+  }
+
+  return {
+    id: message.id,
+    author: isOwn
+      ? currentUser.username
+      : otherUserName,
+    type,
+    text,
+    image: getBackendImageData(message),
+    time: formatTime(message.created_at),
+    createdAt: message.created_at,
+    isOwn,
+  };
 }
 
 function convertBackendChat(chat) {     // Преобразование данных чата из формата бэкенда в формат фронтенда
@@ -89,8 +169,7 @@ function removeMessageFromChats(
       ...chat,
       messages: remainingMessages,
       lastMessage:
-        lastMessage?.text ??
-        "Сообщений пока нет",
+        getMessagePreview(lastMessage),
       time: lastMessage?.time ?? "",
       lastMessageAt:
         lastMessage?.createdAt ?? null,
@@ -240,26 +319,33 @@ function App() {
                 };
               }
 
-              let text;
+              const messageType =
+                getBackendMessageType(
+                  lastBackendMessage
+                );
 
-              try {
-                text = await decryptMessage({
-                  ciphertext:
-                    lastBackendMessage.ciphertext,
-                  iv: lastBackendMessage.iv,
-                  currentUserId:
-                    currentUser.id,
-                  privateKey:
-                    cryptoKeys.privateKey,
-                });
-              } catch {
-                text =
-                  "Не удалось расшифровать сообщение";
+              let previewText = "📷 Изображение";
+
+              if (messageType === "text") {
+                try {
+                  previewText = await decryptMessage({
+                    ciphertext:
+                      lastBackendMessage.ciphertext,
+                    iv: lastBackendMessage.iv,
+                    currentUserId:
+                      currentUser.id,
+                    privateKey:
+                      cryptoKeys.privateKey,
+                  });
+                } catch {
+                  previewText =
+                    "Не удалось расшифровать сообщение";
+                }
               }
 
               return {
                 chatId,
-                lastMessage: text,
+                lastMessage: previewText,
                 time: formatTime(
                   lastBackendMessage.created_at
                 ),
@@ -563,39 +649,14 @@ function App() {
         }
 
         const preparedMessages = await Promise.all(
-          backendMessages.map(async (message) => {
-            let text;
-
-            try {
-              text = await decryptMessage({
-                ciphertext: message.ciphertext,
-                iv: message.iv,
-                currentUserId: currentUser.id,
-                privateKey: cryptoKeys.privateKey,
-              });
-            } catch (error) {
-              console.error(
-                "Не удалось расшифровать сообщение:",
-                error
-              );
-
-              text = "Не удалось расшифровать сообщение";
-            }
-
-            const isOwn =
-              message.sender_id === currentUser.id;
-
-            return {
-              id: message.id,
-              author: isOwn
-                ? currentUser.username
-                : selectedChatName,
-              text,
-              time: formatTime(message.created_at),
-              createdAt: message.created_at,
-              isOwn,
-            };
-          })
+          backendMessages.map((message) =>
+            prepareBackendMessage({
+              message,
+              currentUser,
+              otherUserName: selectedChatName,
+              privateKey: cryptoKeys.privateKey,
+            })
+          )
         );
 
         if (isCancelled) {
@@ -626,8 +687,7 @@ function App() {
               ...chat,
               messages: mergedMessages,
               lastMessage:
-                lastMessage?.text ??
-                "Сообщений пока нет",
+                getMessagePreview(lastMessage),
               time: lastMessage?.time ?? "",
               lastMessageAt:
                 lastMessage?.createdAt ?? null,
@@ -687,39 +747,14 @@ function App() {
         : response.messages ?? [];
 
       const preparedMessages = await Promise.all(
-        backendMessages.map(async (message) => {
-          let text;
-
-          try {
-            text = await decryptMessage({
-              ciphertext: message.ciphertext,
-              iv: message.iv,
-              currentUserId: currentUser.id,
-              privateKey: cryptoKeys.privateKey,
-            });
-          } catch (error) {
-            console.error(
-              "Ошибка расшифровки старого сообщения:",
-              error
-            );
-
-            text = "Не удалось расшифровать сообщение";
-          }
-
-          const isOwn =
-            message.sender_id === currentUser.id;
-
-          return {
-            id: message.id,
-            author: isOwn
-              ? currentUser.username
-              : selectedChatName,
-            text,
-            time: formatTime(message.created_at),
-            createdAt: message.created_at,
-            isOwn,
-          };
-        })
+        backendMessages.map((message) =>
+          prepareBackendMessage({
+            message,
+            currentUser,
+            otherUserName: selectedChatName,
+            privateKey: cryptoKeys.privateKey,
+          })
+        )
       );
 
       setChats((previousChats) =>
@@ -813,24 +848,29 @@ function App() {
             return;
           }
 
-          let text;
+          const messageType =
+            getBackendMessageType(backendMessage);
 
-          try {
-            text = await decryptMessage({
-              ciphertext:
-                backendMessage.ciphertext,
-              iv: backendMessage.iv,
-              currentUserId: currentUser.id,
-              privateKey: cryptoKeys.privateKey,
-            });
-          } catch (error) {
-            console.error(
-              "Ошибка расшифровки WebSocket-сообщения:",
-              error
-            );
+          let text = "";
 
-            text =
-              "Не удалось расшифровать сообщение";
+          if (messageType === "text") {
+            try {
+              text = await decryptMessage({
+                ciphertext:
+                  backendMessage.ciphertext,
+                iv: backendMessage.iv,
+                currentUserId: currentUser.id,
+                privateKey: cryptoKeys.privateKey,
+              });
+            } catch (error) {
+              console.error(
+                "Ошибка расшифровки WebSocket-сообщения:",
+                error
+              );
+
+              text =
+                "Не удалось расшифровать сообщение";
+            }
           }
 
           const chatsResponse =
@@ -885,7 +925,10 @@ function App() {
             const preparedMessage = {
               id: backendMessage.id,
               author: targetChat.name,
+              type: messageType,
               text,
+              image:
+                getBackendImageData(backendMessage),
               time: formatTime(
                 backendMessage.created_at
               ),
@@ -896,7 +939,8 @@ function App() {
 
             const updatedChat = {
               ...targetChat,
-              lastMessage: preparedMessage.text,
+              lastMessage:
+                getMessagePreview(preparedMessage),
               time: preparedMessage.time,
               lastMessageAt:
                 preparedMessage.createdAt,
@@ -1034,6 +1078,7 @@ function App() {
     const temporaryMessage = {
       id: temporaryId,
       author: currentUser.username,
+      type: "text",
       text,
       time: formatTime(temporaryCreatedAt),
       createdAt: temporaryCreatedAt,
@@ -1145,6 +1190,127 @@ function App() {
         })
       );
 
+      setActionError(error.message);
+      throw error;
+    }
+  }
+
+  async function handleSendImage(
+    chatId,
+    file,
+    { width, height }
+  ) {
+    if (!cryptoKeys) {
+      throw new Error(
+        "Ключи шифрования ещё не готовы"
+      );
+    }
+
+    const chat = chats.find(
+      (item) => item.id === chatId
+    );
+
+    if (!chat) {
+      throw new Error("Чат не найден");
+    }
+
+    const allowedImageTypes = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]);
+
+    if (!allowedImageTypes.has(file.type)) {
+      throw new Error(
+        "Можно отправлять только JPEG, PNG и WebP"
+      );
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error(
+        "Размер изображения не должен превышать 10 МБ"
+      );
+    }
+
+    try {
+      setActionError("");
+
+      const recipientKeyData =
+        await getUserPublicKey(
+          token,
+          chat.otherUserId
+        );
+
+      const recipientPublicKey =
+        await importPublicKey(
+          recipientKeyData.public_key
+        );
+
+      const encryptedImage = await encryptFile({
+        file,
+        publicKeys: {
+          [currentUser.id]:
+            cryptoKeys.publicKey,
+          [chat.otherUserId]:
+            recipientPublicKey,
+        },
+      });
+
+      const backendMessage =
+        await sendImageMessageRequest(
+          token,
+          chatId,
+          {
+            encryptedFile:
+              encryptedImage.encryptedFile,
+            ciphertext:
+              encryptedImage.ciphertext,
+            iv: encryptedImage.iv,
+            keyVersion:
+              encryptedImage.key_version,
+            mimeType: file.type,
+            width,
+            height,
+          }
+        );
+
+      const savedMessage = {
+        id: backendMessage.id,
+        author: currentUser.username,
+        type: "image",
+        text: "",
+        image:
+          getBackendImageData(backendMessage),
+        time: formatTime(
+          backendMessage.created_at
+        ),
+        createdAt:
+          backendMessage.created_at,
+        isOwn: true,
+        isSending: false,
+      };
+
+      setChats((previousChats) =>
+        previousChats.map((currentChat) => {
+          if (currentChat.id !== chatId) {
+            return currentChat;
+          }
+
+          return {
+            ...currentChat,
+            lastMessage:
+              getMessagePreview(savedMessage),
+            time: savedMessage.time,
+            lastMessageAt:
+              savedMessage.createdAt,
+            messages: [
+              ...currentChat.messages,
+              savedMessage,
+            ],
+          };
+        })
+      );
+    } catch (error) {
       setActionError(error.message);
       throw error;
     }
@@ -1333,14 +1499,21 @@ function App() {
           </main>
         ) : (
           <ChatWindow
+            key={selectedChat?.id ?? "empty-chat"}
             chat={selectedChat}
             onBack={handleBackToChats}
             onSendMessage={handleSendMessage}
+            onSendImage={handleSendImage}
             onDeleteMessage={handleDeleteMessage}
             error={actionError}
             hasMoreMessages={hasMoreMessages}
             isLoadingOlderMessages={isLoadingOlderMessages}
             onLoadOlderMessages={handleLoadOlderMessages}
+            imageAccess={{
+              token,
+              currentUserId: currentUser.id,
+              privateKey: cryptoKeys.privateKey,
+            }}
           />
         )}
       </div>
