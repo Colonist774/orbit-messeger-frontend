@@ -6,9 +6,31 @@ import {
 import {
   getImageAttachment,
 } from "../api/messages";
+
 import {
   decryptFile,
 } from "../utils/crypto";
+
+
+function waitForImageToLoad(url) {
+  return new Promise((resolve, reject) => {
+    const previewImage = new Image();
+
+    previewImage.onload = () => {
+      resolve();
+    };
+
+    previewImage.onerror = () => {
+      reject(
+        new Error(
+          "Браузер не смог прочитать расшифрованное изображение"
+        )
+      );
+    };
+
+    previewImage.src = url;
+  });
+}
 
 
 function MessageImage({
@@ -20,6 +42,7 @@ function MessageImage({
   privateKey,
 }) {
   const [retryKey, setRetryKey] = useState(0);
+
   const [imageState, setImageState] = useState({
     status: "loading",
     url: "",
@@ -31,7 +54,19 @@ function MessageImage({
     let objectUrl = "";
 
     async function loadImage() {
+      setImageState({
+        status: "loading",
+        url: "",
+        error: "",
+      });
+
       try {
+        if (!token || !privateKey) {
+          throw new Error(
+            "Ключи шифрования ещё не подготовлены"
+          );
+        }
+
         const encryptedBuffer =
           await getImageAttachment(
             token,
@@ -48,13 +83,23 @@ function MessageImage({
           mimeType: image.mimeType,
         });
 
-        if (isCancelled) {
-          return;
+        if (decryptedBlob.size === 0) {
+          throw new Error(
+            "После расшифровки получен пустой файл"
+          );
         }
 
         objectUrl = URL.createObjectURL(
           decryptedBlob
         );
+
+        await waitForImageToLoad(objectUrl);
+
+        if (isCancelled) {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = "";
+          return;
+        }
 
         setImageState({
           status: "ready",
@@ -62,11 +107,24 @@ function MessageImage({
           error: "",
         });
       } catch (error) {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = "";
+        }
+
         if (!isCancelled) {
+          console.error(
+            `Ошибка загрузки изображения ${messageId}:`,
+            error
+          );
+
           setImageState({
             status: "error",
             url: "",
-            error: error.message,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Неизвестная ошибка изображения",
           });
         }
       }
@@ -111,11 +169,6 @@ function MessageImage({
         <button
           type="button"
           onClick={() => {
-            setImageState({
-              status: "loading",
-              url: "",
-              error: "",
-            });
             setRetryKey(
               (previousKey) => previousKey + 1
             );
@@ -128,6 +181,11 @@ function MessageImage({
     );
   }
 
+  const aspectRatio =
+    image.width && image.height
+      ? `${image.width} / ${image.height}`
+      : "16 / 9";
+
   return (
     <a
       className="message-image-link"
@@ -135,14 +193,22 @@ function MessageImage({
       target="_blank"
       rel="noreferrer"
       title="Открыть изображение"
+      style={{
+        aspectRatio,
+      }}
     >
       <img
         className="message-image"
         src={imageState.url}
         alt="Отправленное изображение"
-        width={image.width ?? undefined}
-        height={image.height ?? undefined}
-        loading="lazy"
+        onError={() => {
+          setImageState({
+            status: "error",
+            url: "",
+            error:
+              "Изображение перестало быть доступно браузеру",
+          });
+        }}
       />
     </a>
   );
