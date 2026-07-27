@@ -1,8 +1,7 @@
-// отвечает за работу с сообщениями, получение списка сообщений в чате, 
-// отправку нового сообщения и удаление сообщения.
-
+// Работа с текстовыми сообщениями и зашифрованными вложениями.
 
 const API_URL = "";
+
 
 async function readError(response) {
   if (response.status === 401) {
@@ -14,7 +13,13 @@ async function readError(response) {
   return data?.detail || "Ошибка запроса";
 }
 
-export async function getMessages(token, chatId, beforeMessageId = null, limit = 50) {
+
+export async function getMessages(
+  token,
+  chatId,
+  beforeMessageId = null,
+  limit = 50
+) {
   const params = new URLSearchParams();
 
   params.set("limit", limit);
@@ -38,6 +43,7 @@ export async function getMessages(token, chatId, beforeMessageId = null, limit =
 
   return response.json();
 }
+
 
 export async function sendMessage(
   token,
@@ -84,17 +90,20 @@ export async function deleteMessage(
   }
 }
 
-export async function sendImageMessage(
+
+export async function sendAttachmentMessage(
   token,
   chatId,
   {
     encryptedFile,
+    messageType,
     ciphertext,
     iv,
     keyVersion,
     mimeType,
-    width,
-    height,
+    width = null,
+    height = null,
+    durationMs = null,
   }
 ) {
   const formData = new FormData();
@@ -102,8 +111,9 @@ export async function sendImageMessage(
   formData.append(
     "file",
     encryptedFile,
-    "image.enc"
+    `${messageType}.enc`
   );
+  formData.append("message_type", messageType);
   formData.append("ciphertext", ciphertext);
   formData.append("iv", iv);
   formData.append(
@@ -111,11 +121,27 @@ export async function sendImageMessage(
     String(keyVersion)
   );
   formData.append("mime_type", mimeType);
-  formData.append("width", String(width));
-  formData.append("height", String(height));
+
+  if (width !== null && width !== undefined) {
+    formData.append("width", String(width));
+  }
+
+  if (height !== null && height !== undefined) {
+    formData.append("height", String(height));
+  }
+
+  if (
+    durationMs !== null &&
+    durationMs !== undefined
+  ) {
+    formData.append(
+      "duration_ms",
+      String(durationMs)
+    );
+  }
 
   const response = await fetch(
-    `${API_URL}/api/chats/${chatId}/image-messages`,
+    `${API_URL}/api/chats/${chatId}/attachment-messages`,
     {
       method: "POST",
       headers: {
@@ -133,7 +159,24 @@ export async function sendImageMessage(
 }
 
 
-export async function getImageAttachment(
+// Совместимость со старым кодом изображений.
+export async function sendImageMessage(
+  token,
+  chatId,
+  data
+) {
+  return sendAttachmentMessage(
+    token,
+    chatId,
+    {
+      ...data,
+      messageType: "image",
+    }
+  );
+}
+
+
+export async function getAttachment(
   token,
   chatId,
   messageId
@@ -144,6 +187,7 @@ export async function getImageAttachment(
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      cache: "no-store",
     }
   );
 
@@ -152,4 +196,17 @@ export async function getImageAttachment(
   }
 
   return response.arrayBuffer();
+}
+
+
+export async function getImageAttachment(
+  token,
+  chatId,
+  messageId
+) {
+  return getAttachment(
+    token,
+    chatId,
+    messageId
+  );
 }

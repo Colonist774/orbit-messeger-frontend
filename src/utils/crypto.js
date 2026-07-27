@@ -438,7 +438,7 @@ export async function decryptFile({
     payload = JSON.parse(ciphertext);
   } catch {
     throw new Error(
-      "Не удалось прочитать данные шифрования изображения"
+      "Не удалось прочитать данные шифрования файла"
     );
   }
 
@@ -448,7 +448,7 @@ export async function decryptFile({
     !payload.keys
   ) {
     throw new Error(
-      "Неподдерживаемый формат зашифрованного изображения"
+      "Неподдерживаемый формат зашифрованного файла"
     );
   }
 
@@ -457,7 +457,7 @@ export async function decryptFile({
 
   if (!encryptedAesKey) {
     throw new Error(
-      "Изображение не зашифровано для текущего пользователя"
+      "Файл не зашифрован для текущего пользователя"
     );
   }
 

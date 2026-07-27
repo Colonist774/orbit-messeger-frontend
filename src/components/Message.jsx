@@ -1,7 +1,7 @@
-// отвечает за отображение отдельного сообщения в чате, включая автора, текст, изображение,
-// время отправки, кнопку удаления и статус прочтения для собственных сообщений.
+// Отображает текстовое сообщение или зашифрованное вложение.
 
 import MessageImage from "./MessageImage";
+import MessageMedia from "./MessageMedia";
 
 
 function Message({
@@ -11,13 +11,18 @@ function Message({
   text,
   time,
   type,
-  image,
+  attachment,
   isOwn,
   canDelete,
   onDelete,
-  imageAccess,
+  attachmentAccess,
 }) {
   const isImage = type === "image";
+  const isAudio = type === "audio";
+  const isVideo = type === "video";
+
+  const isAttachment =
+    isImage || isAudio || isVideo;
 
   return (
     <article
@@ -25,7 +30,15 @@ function Message({
       className={`message ${
         isOwn ? "message--own" : ""
       } ${
+        isAttachment
+          ? "message--attachment"
+          : ""
+      } ${
         isImage ? "message--image" : ""
+      } ${
+        isAudio ? "message--audio" : ""
+      } ${
+        isVideo ? "message--video" : ""
       }`}
     >
       {!isOwn && (
@@ -34,16 +47,32 @@ function Message({
         </span>
       )}
 
-      {isImage && image ? (
+      {isImage && attachment ? (
         <MessageImage
           chatId={chatId}
           messageId={messageId}
-          image={image}
-          token={imageAccess.token}
+          image={attachment}
+          token={attachmentAccess.token}
           currentUserId={
-            imageAccess.currentUserId
+            attachmentAccess.currentUserId
           }
-          privateKey={imageAccess.privateKey}
+          privateKey={
+            attachmentAccess.privateKey
+          }
+        />
+      ) : (isAudio || isVideo) && attachment ? (
+        <MessageMedia
+          chatId={chatId}
+          messageId={messageId}
+          type={type}
+          attachment={attachment}
+          token={attachmentAccess.token}
+          currentUserId={
+            attachmentAccess.currentUserId
+          }
+          privateKey={
+            attachmentAccess.privateKey
+          }
         />
       ) : (
         <p className="message__text">
@@ -71,5 +100,6 @@ function Message({
     </article>
   );
 }
+
 
 export default Message;

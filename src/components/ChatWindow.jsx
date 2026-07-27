@@ -1,6 +1,3 @@
-// отвечает за окно чата, отображение сообщений, отправку текста и изображений,
-// удаление сообщений и возврат к списку чатов на мобильных устройствах.
-
 import {
   Fragment,
   useCallback,
@@ -9,21 +6,104 @@ import {
   useRef,
   useState,
 } from "react";
+
 import Message from "./Message";
 
 
-const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
-]);
+const ALLOWED_ATTACHMENT_TYPES = {
+  image: new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+  ]),
+  audio: new Set([
+    "audio/webm",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/aac",
+    "audio/flac",
+  ]),
+  video: new Set([
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/x-m4v",
+    "video/ogg",
+  ]),
+};
 
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE_BYTES = {
+  image: 10 * 1024 * 1024,
+  audio: 25 * 1024 * 1024,
+  video: 100 * 1024 * 1024,
+};
 
 
-function getImageDimensions(previewUrl) {
+function normalizeMimeType(mimeType) {
+  return mimeType
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+}
+
+
+function getAttachmentType(file) {
+  const mimeType = normalizeMimeType(
+    file.type || ""
+  );
+
+  for (const [type, allowedTypes] of Object.entries(
+    ALLOWED_ATTACHMENT_TYPES
+  )) {
+    if (allowedTypes.has(mimeType)) {
+      return {
+        type,
+        mimeType,
+      };
+    }
+  }
+
+  return null;
+}
+
+
+function getAttachmentLabel(type) {
+  if (type === "image") {
+    return "Изображение";
+  }
+
+  if (type === "audio") {
+    return "Аудио";
+  }
+
+  return "Видео";
+}
+
+
+function formatFileSize(sizeBytes) {
+  return `${(
+    sizeBytes / 1024 / 1024
+  ).toFixed(1)} МБ`;
+}
+
+
+function formatRecordingTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  return `${String(minutes).padStart(2, "0")}:${String(
+    remainingSeconds
+  ).padStart(2, "0")}`;
+}
+
+
+function getImageMetadata(previewUrl) {
   return new Promise((resolve, reject) => {
     const image = new Image();
 
@@ -31,12 +111,15 @@ function getImageDimensions(previewUrl) {
       resolve({
         width: image.naturalWidth,
         height: image.naturalHeight,
+        durationMs: null,
       });
     };
 
     image.onerror = () => {
       reject(
-        new Error("Не удалось прочитать изображение")
+        new Error(
+          "Браузер не смог прочитать изображение"
+        )
       );
     };
 
@@ -45,64 +128,205 @@ function getImageDimensions(previewUrl) {
 }
 
 
+function getAudioMetadata(previewUrl) {
+  return new Promise((resolve, reject) => {
+    const audio = document.createElement("audio");
+
+    audio.preload = "metadata";
+
+    audio.onloadedmetadata = () => {
+      resolve({
+        width: null,
+        height: null,
+        durationMs: Number.isFinite(audio.duration)
+          ? Math.round(audio.duration * 1000)
+          : null,
+      });
+    };
+
+    audio.onerror = () => {
+      reject(
+        new Error(
+          "Браузер не смог прочитать аудиофайл"
+        )
+      );
+    };
+
+    audio.src = previewUrl;
+  });
+}
+
+
+function getVideoMetadata(previewUrl) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+
+    video.preload = "metadata";
+
+    video.onloadedmetadata = () => {
+      resolve({
+        width: video.videoWidth || null,
+        height: video.videoHeight || null,
+        durationMs: Number.isFinite(video.duration)
+          ? Math.round(video.duration * 1000)
+          : null,
+      });
+    };
+
+    video.onerror = () => {
+      reject(
+        new Error(
+          "Браузер не смог прочитать видеофайл"
+        )
+      );
+    };
+
+    video.src = previewUrl;
+  });
+}
+
+
+function getAttachmentMetadata(type, previewUrl) {
+  if (type === "image") {
+    return getImageMetadata(previewUrl);
+  }
+
+  if (type === "audio") {
+    return getAudioMetadata(previewUrl);
+  }
+
+  return getVideoMetadata(previewUrl);
+}
+
+
+function getSupportedRecordingMimeType() {
+  if (
+    typeof MediaRecorder === "undefined" ||
+    typeof MediaRecorder.isTypeSupported !==
+      "function"
+  ) {
+    return "";
+  }
+
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/mp4",
+    "audio/ogg;codecs=opus",
+    "audio/webm",
+  ];
+
+  return (
+    candidates.find((mimeType) =>
+      MediaRecorder.isTypeSupported(mimeType)
+    ) ?? ""
+  );
+}
+
+
+function getAudioExtension(mimeType) {
+  const normalizedMime =
+    normalizeMimeType(mimeType);
+
+  if (normalizedMime === "audio/mp4") {
+    return "m4a";
+  }
+
+  if (normalizedMime === "audio/ogg") {
+    return "ogg";
+  }
+
+  if (normalizedMime === "audio/mpeg") {
+    return "mp3";
+  }
+
+  return "webm";
+}
+
+
 function ChatWindow({
   chat,
   onBack,
   onSendMessage,
-  onSendImage,
+  onSendAttachment,
   onDeleteMessage,
   error,
   hasMoreMessages,
   isLoadingOlderMessages,
   onLoadOlderMessages,
-  imageAccess,
+  attachmentAccess,
 }) {
   const [text, setText] = useState("");
-  const [selectedImage, setSelectedImage] =
+  const [selectedAttachment, setSelectedAttachment] =
     useState(null);
-  const [imageSelectionError, setImageSelectionError] =
+  const [attachmentError, setAttachmentError] =
     useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isRecording, setIsRecording] =
+    useState(false);
+  const [recordingSeconds, setRecordingSeconds] =
+    useState(0);
 
   const isSendingRef = useRef(false);
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  // Невидимый элемент, при появлении которого заранее
-  // загружаются старые сообщения.
   const loadTriggerRef = useRef(null);
-
-  // Хранит конкретное видимое сообщение и его позицию
-  // перед загрузкой старых сообщений.
   const loadAnchorRef = useRef(null);
+
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordingStartedAtRef = useRef(0);
+  const recordingTimerRef = useRef(null);
+  const discardRecordingRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   const lastMessageId =
     chat?.messages.at(-1)?.id;
 
-  const selectedImageUrl =
-    selectedImage?.previewUrl ?? "";
+  const selectedAttachmentUrl =
+    selectedAttachment?.previewUrl ?? "";
 
-  // Освобождаем временный blob URL при замене картинки
-  // или закрытии текущего окна чата.
   useEffect(() => {
     return () => {
-      if (selectedImageUrl) {
-        URL.revokeObjectURL(selectedImageUrl);
+      if (selectedAttachmentUrl) {
+        URL.revokeObjectURL(
+          selectedAttachmentUrl
+        );
       }
     };
-  }, [selectedImageUrl]);
+  }, [selectedAttachmentUrl]);
 
-  // При открытии другого чата или появлении нового
-  // сообщения прокручиваем чат вниз.
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      discardRecordingRef.current = true;
+
+      clearInterval(recordingTimerRef.current);
+
+      const recorder = mediaRecorderRef.current;
+
+      if (
+        recorder &&
+        recorder.state !== "inactive"
+      ) {
+        recorder.stop();
+      }
+
+      mediaStreamRef.current
+        ?.getTracks()
+        .forEach((track) => track.stop());
+    };
+  }, []);
+
   useLayoutEffect(() => {
     messagesEndRef.current?.scrollIntoView({
       behavior: "auto",
     });
   }, [chat?.id, lastMessageId]);
 
-  // После загрузки старых сообщений возвращаем то же
-  // видимое сообщение на прежнюю позицию.
   useLayoutEffect(() => {
     const anchor = loadAnchorRef.current;
     const messageList = messageListRef.current;
@@ -134,8 +358,6 @@ function ChatWindow({
     loadAnchorRef.current = null;
   }, [chat?.messages.length]);
 
-  // Загрузка более старых сообщений и сохранение
-  // позиции прокрутки.
   const loadOlderMessagesAndKeepPosition =
     useCallback(async () => {
       const messageList = messageListRef.current;
@@ -191,9 +413,6 @@ function ChatWindow({
       onLoadOlderMessages,
     ]);
 
-  // Следим за невидимым элементом возле начала
-  // загруженных сообщений и заранее загружаем следующую
-  // порцию.
   useEffect(() => {
     const trigger = loadTriggerRef.current;
     const messageList = messageListRef.current;
@@ -238,25 +457,16 @@ function ChatWindow({
     setText(event.target.value);
   }
 
-  function clearSelectedImage() {
-    setSelectedImage((previousImage) => {
-      if (previousImage?.previewUrl) {
-        URL.revokeObjectURL(
-          previousImage.previewUrl
-        );
-      }
-
-      return null;
-    });
-
-    setImageSelectionError("");
+  function clearSelectedAttachment() {
+    setSelectedAttachment(null);
+    setAttachmentError("");
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   }
 
-  async function handleImageSelection(event) {
+  async function handleAttachmentSelection(event) {
     const input = event.target;
     const file = input.files?.[0];
 
@@ -264,19 +474,28 @@ function ChatWindow({
       return;
     }
 
-    setImageSelectionError("");
+    setAttachmentError("");
 
-    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-      setImageSelectionError(
-        "Можно отправлять только JPEG, PNG, WebP, GIF и AVIF"
+    const attachmentType =
+      getAttachmentType(file);
+
+    if (!attachmentType) {
+      setAttachmentError(
+        "Неподдерживаемый формат. Выберите изображение, аудио или видео"
       );
       input.value = "";
       return;
     }
 
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      setImageSelectionError(
-        "Размер изображения не должен превышать 10 МБ"
+    const { type, mimeType } = attachmentType;
+    const maxSize =
+      MAX_ATTACHMENT_SIZE_BYTES[type];
+
+    if (file.size > maxSize) {
+      setAttachmentError(
+        `${getAttachmentLabel(type)} не должно превышать ${
+          maxSize / 1024 / 1024
+        } МБ`
       );
       input.value = "";
       return;
@@ -285,28 +504,24 @@ function ChatWindow({
     const previewUrl = URL.createObjectURL(file);
 
     try {
-      const dimensions =
-        await getImageDimensions(previewUrl);
+      const metadata =
+        await getAttachmentMetadata(
+          type,
+          previewUrl
+        );
 
-      setSelectedImage((previousImage) => {
-        if (previousImage?.previewUrl) {
-          URL.revokeObjectURL(
-            previousImage.previewUrl
-          );
-        }
-
-        return {
-          file,
-          previewUrl,
-          width: dimensions.width,
-          height: dimensions.height,
-        };
+      setSelectedAttachment({
+        file,
+        type,
+        mimeType,
+        previewUrl,
+        ...metadata,
       });
 
       setText("");
     } catch (selectionError) {
       URL.revokeObjectURL(previewUrl);
-      setImageSelectionError(
+      setAttachmentError(
         selectionError.message
       );
     } finally {
@@ -314,16 +529,204 @@ function ChatWindow({
     }
   }
 
-  // Одна форма отправляет либо выбранное изображение,
-  // либо обычный текст.
+  function stopRecordingStream() {
+    mediaStreamRef.current
+      ?.getTracks()
+      .forEach((track) => track.stop());
+
+    mediaStreamRef.current = null;
+  }
+
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+
+    if (
+      recorder &&
+      recorder.state !== "inactive"
+    ) {
+      recorder.stop();
+    }
+  }
+
+  function cancelRecording() {
+    discardRecordingRef.current = true;
+    stopRecording();
+  }
+
+  async function startRecording() {
+    if (
+      isSending ||
+      isRecording ||
+      selectedAttachment
+    ) {
+      return;
+    }
+
+    setAttachmentError("");
+
+    if (
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === "undefined"
+    ) {
+      setAttachmentError(
+        "Этот браузер не поддерживает запись голосовых сообщений"
+      );
+      return;
+    }
+
+    try {
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+
+      const preferredMimeType =
+        getSupportedRecordingMimeType();
+
+      const recorder = preferredMimeType
+        ? new MediaRecorder(stream, {
+            mimeType: preferredMimeType,
+          })
+        : new MediaRecorder(stream);
+
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      recordedChunksRef.current = [];
+      discardRecordingRef.current = false;
+      recordingStartedAtRef.current =
+        Date.now();
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(
+            event.data
+          );
+        }
+      };
+
+      recorder.onerror = () => {
+        if (isMountedRef.current) {
+          setAttachmentError(
+            "Не удалось записать голосовое сообщение"
+          );
+          setIsRecording(false);
+        }
+
+        clearInterval(
+          recordingTimerRef.current
+        );
+        stopRecordingStream();
+      };
+
+      recorder.onstop = () => {
+        clearInterval(
+          recordingTimerRef.current
+        );
+
+        const durationMs = Math.max(
+          1,
+          Date.now() -
+            recordingStartedAtRef.current
+        );
+
+        const shouldDiscard =
+          discardRecordingRef.current;
+
+        const chunks = [
+          ...recordedChunksRef.current,
+        ];
+
+        const rawMimeType =
+          recorder.mimeType ||
+          preferredMimeType ||
+          "audio/webm";
+
+        const normalizedMimeType =
+          normalizeMimeType(rawMimeType);
+
+        stopRecordingStream();
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setIsRecording(false);
+        setRecordingSeconds(0);
+
+        if (shouldDiscard || chunks.length === 0) {
+          return;
+        }
+
+        const blob = new Blob(chunks, {
+          type: rawMimeType,
+        });
+
+        const extension =
+          getAudioExtension(rawMimeType);
+
+        const file = new File(
+          [blob],
+          `voice-${Date.now()}.${extension}`,
+          {
+            type: normalizedMimeType,
+          }
+        );
+
+        const previewUrl =
+          URL.createObjectURL(file);
+
+        setSelectedAttachment({
+          file,
+          type: "audio",
+          mimeType: normalizedMimeType,
+          previewUrl,
+          width: null,
+          height: null,
+          durationMs,
+        });
+      };
+
+      recorder.start(250);
+
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      recordingTimerRef.current =
+        setInterval(() => {
+          setRecordingSeconds(
+            Math.floor(
+              (
+                Date.now() -
+                recordingStartedAtRef.current
+              ) / 1000
+            )
+          );
+        }, 250);
+    } catch (recordingError) {
+      stopRecordingStream();
+
+      const message =
+        recordingError?.name ===
+        "NotAllowedError"
+          ? "Нет разрешения на использование микрофона"
+          : "Не удалось начать запись голосового сообщения";
+
+      setAttachmentError(message);
+    }
+  }
+
   async function sendMessage(event) {
     event.preventDefault();
 
     const preparedText = text.trim();
 
     if (
-      (!selectedImage && preparedText === "") ||
-      isSendingRef.current
+      (
+        !selectedAttachment &&
+        preparedText === ""
+      ) ||
+      isSendingRef.current ||
+      isRecording
     ) {
       return;
     }
@@ -331,22 +734,28 @@ function ChatWindow({
     isSendingRef.current = true;
     setIsSending(true);
 
-    if (!selectedImage) {
+    if (!selectedAttachment) {
       setText("");
     }
 
     try {
-      if (selectedImage) {
-        await onSendImage(
+      if (selectedAttachment) {
+        await onSendAttachment(
           chat.id,
-          selectedImage.file,
+          selectedAttachment.file,
           {
-            width: selectedImage.width,
-            height: selectedImage.height,
+            type: selectedAttachment.type,
+            mimeType:
+              selectedAttachment.mimeType,
+            width: selectedAttachment.width,
+            height:
+              selectedAttachment.height,
+            durationMs:
+              selectedAttachment.durationMs,
           }
         );
 
-        clearSelectedImage();
+        clearSelectedAttachment();
       } else {
         await onSendMessage(
           chat.id,
@@ -359,7 +768,7 @@ function ChatWindow({
         sendError
       );
 
-      if (!selectedImage) {
+      if (!selectedAttachment) {
         setText(preparedText);
       }
     } finally {
@@ -379,7 +788,7 @@ function ChatWindow({
   }
 
   const displayedError =
-    imageSelectionError || error;
+    attachmentError || error;
 
   return (
     <main className="chat-window">
@@ -450,9 +859,11 @@ function ChatWindow({
                 text={message.text}
                 time={message.time}
                 type={message.type}
-                image={message.image}
+                attachment={message.attachment}
                 isOwn={message.isOwn}
-                imageAccess={imageAccess}
+                attachmentAccess={
+                  attachmentAccess
+                }
                 canDelete={
                   message.isOwn &&
                   !message.isSending
@@ -485,30 +896,85 @@ function ChatWindow({
           </div>
         )}
 
-        {selectedImage && (
-          <div className="image-composer-preview">
-            <img
-              src={selectedImage.previewUrl}
-              alt="Предпросмотр выбранного изображения"
-            />
+        {isRecording && (
+          <div className="recording-panel">
+            <span className="recording-panel__dot" />
 
-            <div className="image-composer-preview__info">
+            <strong>
+              Запись{" "}
+              {formatRecordingTime(
+                recordingSeconds
+              )}
+            </strong>
+
+            <button
+              type="button"
+              onClick={cancelRecording}
+            >
+              Отменить
+            </button>
+          </div>
+        )}
+
+        {selectedAttachment && (
+          <div className="attachment-composer-preview">
+            <div className="attachment-composer-preview__media">
+              {selectedAttachment.type ===
+                "image" && (
+                <img
+                  src={
+                    selectedAttachment.previewUrl
+                  }
+                  alt="Предпросмотр изображения"
+                />
+              )}
+
+              {selectedAttachment.type ===
+                "audio" && (
+                <audio
+                  src={
+                    selectedAttachment.previewUrl
+                  }
+                  controls
+                  preload="metadata"
+                />
+              )}
+
+              {selectedAttachment.type ===
+                "video" && (
+                <video
+                  src={
+                    selectedAttachment.previewUrl
+                  }
+                  controls
+                  preload="metadata"
+                  playsInline
+                />
+              )}
+            </div>
+
+            <div className="attachment-composer-preview__info">
               <strong>
-                {selectedImage.file.name}
+                {selectedAttachment.file.name}
               </strong>
 
               <span>
-                {(selectedImage.file.size / 1024 / 1024)
-                  .toFixed(1)} МБ
+                {getAttachmentLabel(
+                  selectedAttachment.type
+                )}
+                {" · "}
+                {formatFileSize(
+                  selectedAttachment.file.size
+                )}
               </span>
             </div>
 
             <button
-              className="image-composer-preview__remove"
+              className="attachment-composer-preview__remove"
               type="button"
-              onClick={clearSelectedImage}
-              aria-label="Убрать выбранное изображение"
-              title="Убрать изображение"
+              onClick={clearSelectedAttachment}
+              aria-label="Убрать выбранный файл"
+              title="Убрать файл"
             >
               ×
             </button>
@@ -523,8 +989,14 @@ function ChatWindow({
             ref={fileInputRef}
             className="message-file-input"
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-            onChange={handleImageSelection}
+            accept={[
+              ...ALLOWED_ATTACHMENT_TYPES.image,
+              ...ALLOWED_ATTACHMENT_TYPES.audio,
+              ...ALLOWED_ATTACHMENT_TYPES.video,
+            ].join(",")}
+            onChange={
+              handleAttachmentSelection
+            }
           />
 
           <button
@@ -533,9 +1005,9 @@ function ChatWindow({
             onClick={() =>
               fileInputRef.current?.click()
             }
-            aria-label="Добавить изображение"
-            title="Добавить изображение"
-            disabled={isSending}
+            aria-label="Добавить файл"
+            title="Добавить изображение, аудио или видео"
+            disabled={isSending || isRecording}
           >
             ＋
           </button>
@@ -545,28 +1017,56 @@ function ChatWindow({
             value={text}
             onChange={handleChange}
             placeholder={
-              selectedImage
-                ? "Изображение выбрано"
-                : "Напишите сообщение..."
+              isRecording
+                ? "Идёт запись..."
+                : selectedAttachment
+                  ? "Файл выбран"
+                  : "Напишите сообщение..."
             }
             autoComplete="off"
             enterKeyHint="send"
-            disabled={Boolean(selectedImage) || isSending}
+            disabled={
+              Boolean(selectedAttachment) ||
+              isSending ||
+              isRecording
+            }
           />
 
           <button
-            className="voice-message-button"
+            className={`voice-message-button ${
+              isRecording
+                ? "voice-message-button--recording"
+                : ""
+            }`}
             type="button"
-            aria-label="Записать голосовое сообщение"
+            onClick={
+              isRecording
+                ? stopRecording
+                : startRecording
+            }
+            aria-label={
+              isRecording
+                ? "Остановить запись"
+                : "Записать голосовое сообщение"
+            }
+            title={
+              isRecording
+                ? "Остановить запись"
+                : "Записать голосовое сообщение"
+            }
+            disabled={
+              isSending ||
+              Boolean(selectedAttachment)
+            }
           >
-            🎙
+            {isRecording ? "■" : "🎙"}
           </button>
 
           <button
             className="send-button"
             type="submit"
             aria-label="Отправить сообщение"
-            disabled={isSending}
+            disabled={isSending || isRecording}
           >
             ➤
           </button>
@@ -575,5 +1075,6 @@ function ChatWindow({
     </main>
   );
 }
+
 
 export default ChatWindow;

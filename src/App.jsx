@@ -17,7 +17,7 @@ import {
 import {
   getMessages,
   sendMessage as sendMessageRequest,
-  sendImageMessage as sendImageMessageRequest,
+  sendAttachmentMessage as sendAttachmentMessageRequest,
   deleteMessage as deleteMessageRequest,
 } from "./api/messages";
 
@@ -46,6 +46,7 @@ import {
 } from "./utils/keyStorage";
 
 import "./App.css";
+import "./media-messages.css";
 
 function formatTime(dateString) {
   return new Date(dateString).toLocaleTimeString([], {
@@ -54,25 +55,91 @@ function formatTime(dateString) {
   });
 }
 
+
+const ATTACHMENT_MESSAGE_TYPES = new Set([
+  "image",
+  "audio",
+  "video",
+]);
+
+const ALLOWED_ATTACHMENT_TYPES = {
+  image: new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+  ]),
+  audio: new Set([
+    "audio/webm",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/aac",
+    "audio/flac",
+  ]),
+  video: new Set([
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/x-m4v",
+    "video/ogg",
+  ]),
+};
+
+const MAX_ATTACHMENT_SIZE_BYTES = {
+  image: 10 * 1024 * 1024,
+  audio: 25 * 1024 * 1024,
+  video: 100 * 1024 * 1024,
+};
+
+
+function normalizeMimeType(mimeType) {
+  return mimeType
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+}
+
+
 function getBackendMessageType(message) {
-  return message.message_type === "image"
-    ? "image"
+  return ATTACHMENT_MESSAGE_TYPES.has(
+    message.message_type
+  )
+    ? message.message_type
     : "text";
 }
+
 
 function getMessagePreview(message) {
   if (!message) {
     return "Сообщений пока нет";
   }
 
-  return message.type === "image"
-    ? "📷 Изображение"
-    : message.text;
+  if (message.type === "image") {
+    return "📷 Изображение";
+  }
+
+  if (message.type === "audio") {
+    return "🎙 Аудио";
+  }
+
+  if (message.type === "video") {
+    return "🎬 Видео";
+  }
+
+  return message.text;
 }
 
-function getBackendImageData(message) {
+
+function getBackendAttachmentData(message) {
+  const type = getBackendMessageType(message);
+
   if (
-    getBackendMessageType(message) !== "image" ||
+    !ATTACHMENT_MESSAGE_TYPES.has(type) ||
     !message.attachment
   ) {
     return null;
@@ -85,8 +152,11 @@ function getBackendImageData(message) {
     sizeBytes: message.attachment.size_bytes,
     width: message.attachment.width,
     height: message.attachment.height,
+    durationMs:
+      message.attachment.duration_ms ?? null,
   };
 }
+
 
 async function prepareBackendMessage({
   message,
@@ -125,7 +195,8 @@ async function prepareBackendMessage({
       : otherUserName,
     type,
     text,
-    image: getBackendImageData(message),
+    attachment:
+      getBackendAttachmentData(message),
     time: formatTime(message.created_at),
     createdAt: message.created_at,
     isOwn,
@@ -324,7 +395,10 @@ function App() {
                   lastBackendMessage
                 );
 
-              let previewText = "📷 Изображение";
+              let previewText = getMessagePreview({
+                  type: messageType,
+                  text: "",
+                });
 
               if (messageType === "text") {
                 try {
@@ -927,8 +1001,8 @@ function App() {
               author: targetChat.name,
               type: messageType,
               text,
-              image:
-                getBackendImageData(backendMessage),
+              attachment:
+                getBackendAttachmentData(backendMessage),
               time: formatTime(
                 backendMessage.created_at
               ),
@@ -1195,10 +1269,17 @@ function App() {
     }
   }
 
-  async function handleSendImage(
+
+  async function handleSendAttachment(
     chatId,
     file,
-    { width, height }
+    {
+      type,
+      mimeType,
+      width = null,
+      height = null,
+      durationMs = null,
+    }
   ) {
     if (!cryptoKeys) {
       throw new Error(
@@ -1214,21 +1295,31 @@ function App() {
       throw new Error("Чат не найден");
     }
 
-    const allowedImageTypes = new Set([
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ]);
+    const normalizedMimeType =
+      normalizeMimeType(
+        mimeType || file.type || ""
+      );
 
-    if (!allowedImageTypes.has(file.type)) {
+    const allowedTypes =
+      ALLOWED_ATTACHMENT_TYPES[type];
+
+    if (
+      !allowedTypes ||
+      !allowedTypes.has(normalizedMimeType)
+    ) {
       throw new Error(
-        "Можно отправлять только JPEG, PNG и WebP"
+        "Неподдерживаемый формат вложения"
       );
     }
 
-    if (file.size > 10 * 1024 * 1024) {
+    const maxSize =
+      MAX_ATTACHMENT_SIZE_BYTES[type];
+
+    if (!maxSize || file.size > maxSize) {
       throw new Error(
-        "Размер изображения не должен превышать 10 МБ"
+        `Файл превышает лимит ${
+          (maxSize ?? 0) / 1024 / 1024
+        } МБ`
       );
     }
 
@@ -1246,41 +1337,46 @@ function App() {
           recipientKeyData.public_key
         );
 
-      const encryptedImage = await encryptFile({
-        file,
-        publicKeys: {
-          [currentUser.id]:
-            cryptoKeys.publicKey,
-          [chat.otherUserId]:
-            recipientPublicKey,
-        },
-      });
+      const encryptedAttachment =
+        await encryptFile({
+          file,
+          publicKeys: {
+            [currentUser.id]:
+              cryptoKeys.publicKey,
+            [chat.otherUserId]:
+              recipientPublicKey,
+          },
+        });
 
       const backendMessage =
-        await sendImageMessageRequest(
+        await sendAttachmentMessageRequest(
           token,
           chatId,
           {
             encryptedFile:
-              encryptedImage.encryptedFile,
+              encryptedAttachment.encryptedFile,
+            messageType: type,
             ciphertext:
-              encryptedImage.ciphertext,
-            iv: encryptedImage.iv,
+              encryptedAttachment.ciphertext,
+            iv: encryptedAttachment.iv,
             keyVersion:
-              encryptedImage.key_version,
-            mimeType: file.type,
+              encryptedAttachment.key_version,
+            mimeType: normalizedMimeType,
             width,
             height,
+            durationMs,
           }
         );
 
       const savedMessage = {
         id: backendMessage.id,
         author: currentUser.username,
-        type: "image",
+        type,
         text: "",
-        image:
-          getBackendImageData(backendMessage),
+        attachment:
+          getBackendAttachmentData(
+            backendMessage
+          ),
         time: formatTime(
           backendMessage.created_at
         ),
@@ -1513,13 +1609,13 @@ if (
             chat={selectedChat}
             onBack={handleBackToChats}
             onSendMessage={handleSendMessage}
-            onSendImage={handleSendImage}
+            onSendAttachment={handleSendAttachment}
             onDeleteMessage={handleDeleteMessage}
             error={actionError}
             hasMoreMessages={hasMoreMessages}
             isLoadingOlderMessages={isLoadingOlderMessages}
             onLoadOlderMessages={handleLoadOlderMessages}
-            imageAccess={{
+            attachmentAccess={{
               token,
               currentUserId: currentUser.id,
               privateKey: cryptoKeys?.privateKey ?? null,
