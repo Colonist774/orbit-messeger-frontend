@@ -16,6 +16,8 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/gif",
+  "image/avif",
 ]);
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -266,7 +268,7 @@ function ChatWindow({
 
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       setImageSelectionError(
-        "Можно отправлять только JPEG, PNG и WebP"
+        "Можно отправлять только JPEG, PNG, WebP, GIF и AVIF"
       );
       input.value = "";
       return;
@@ -521,7 +523,7 @@ function ChatWindow({
             ref={fileInputRef}
             className="message-file-input"
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
             onChange={handleImageSelection}
           />
 
