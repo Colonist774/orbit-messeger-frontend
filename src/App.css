@@ -846,7 +846,7 @@ button {
   }
 
   .message-form {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     gap: 8px;
     padding:
       10px
@@ -854,11 +854,9 @@ button {
       calc(10px + env(safe-area-inset-bottom));
   }
 
-  .voice-message-button {
-    display: none;
-  }
 
-  .attachment-button {
+  .attachment-button,
+  .voice-message-button {
     width: 44px;
     height: 44px;
     display: grid;
