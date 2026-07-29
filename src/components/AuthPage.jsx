@@ -1,7 +1,3 @@
-// Отвечает за страницу авторизации и регистрации пользователя,
-// переключение между режимами входа и регистрации, обработку ошибок,
-// состояние загрузки и сохранение токена после успешного входа.
-
 import { useState } from "react";
 
 import {
@@ -9,22 +5,28 @@ import {
   loginUser,
 } from "../api/auth";
 
+import OrbitLogo from "./OrbitLogo";
+
+
 function AuthPage({ onLogin }) {
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [passwordConfirmation, setPasswordConfirmation] =
+  const [confirmPassword, setConfirmPassword] =
     useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const isRegisterMode = mode === "register";
+
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
     if (
-      mode === "register" &&
-      password !== passwordConfirmation
+      isRegisterMode &&
+      password !== confirmPassword
     ) {
       setError("Пароли не совпадают");
       return;
@@ -33,7 +35,7 @@ function AuthPage({ onLogin }) {
     setIsLoading(true);
 
     try {
-      if (mode === "register") {
+      if (isRegisterMode) {
         await registerUser(username, password);
       }
 
@@ -51,16 +53,17 @@ function AuthPage({ onLogin }) {
         tokenData.access_token,
         password
       );
-    } catch (submitError) {
-      setError(submitError.message);
+    } catch (requestError) {
+      setError(requestError.message);
     } finally {
       setIsLoading(false);
     }
   }
 
+
   function switchMode() {
     setError("");
-    setPasswordConfirmation("");
+    setConfirmPassword("");
 
     setMode((currentMode) =>
       currentMode === "login"
@@ -69,74 +72,107 @@ function AuthPage({ onLogin }) {
     );
   }
 
-  const isRegisterMode = mode === "register";
 
   return (
     <main className="auth-page">
+      <div className="auth-page__halo" aria-hidden="true" />
+
       <form
         className="auth-form"
         onSubmit={handleSubmit}
       >
-        <h1>Orbit</h1>
+        <header className="auth-brand">
+          <OrbitLogo className="auth-brand__logo" />
 
-        <h2>
-          {mode === "login"
-            ? "Вход"
-            : "Регистрация"}
-        </h2>
+          <div className="auth-brand__wordmark">
+            orbit
+          </div>
 
-        <input
-          value={username}
-          onChange={(event) =>
-            setUsername(event.target.value)
-          }
-          minLength={3}
-          maxLength={20}
-          placeholder="Имя пользователя"
-          autoComplete="username"
-          required
-        />
+          <p>мессенджер нового поколения</p>
+        </header>
 
-        <input
-          type="password"
-          value={password}
-          onChange={(event) =>
-            setPassword(event.target.value)
-          }
-          minLength={6}
-          maxLength={100}
-          placeholder="Пароль"
-          autoComplete={
-            isRegisterMode
-              ? "new-password"
-              : "current-password"
-          }
-          required
-        />
+        <div className="auth-form__heading">
+          <h1>
+            {isRegisterMode
+              ? "Создать аккаунт"
+              : "Добро пожаловать"}
+          </h1>
 
-        {isRegisterMode && (
+          <p>
+            {isRegisterMode
+              ? "Присоединяйтесь к защищённому пространству общения"
+              : "Войдите, чтобы продолжить общение"}
+          </p>
+        </div>
+
+        <label className="auth-field auth-field--user">
+          <span className="visually-hidden">
+            Имя пользователя
+          </span>
+
+          <input
+            value={username}
+            onChange={(event) =>
+              setUsername(event.target.value)
+            }
+            minLength={3}
+            maxLength={20}
+            placeholder="Имя пользователя"
+            autoComplete="username"
+            required
+          />
+        </label>
+
+        <label className="auth-field auth-field--password">
+          <span className="visually-hidden">
+            Пароль
+          </span>
+
           <input
             type="password"
-            value={passwordConfirmation}
+            value={password}
             onChange={(event) =>
-              setPasswordConfirmation(
-                event.target.value
-              )
+              setPassword(event.target.value)
             }
             minLength={6}
             maxLength={100}
-            placeholder="Повторите пароль"
-            autoComplete="new-password"
-            aria-invalid={
-              passwordConfirmation !== "" &&
-              password !== passwordConfirmation
+            placeholder="Пароль"
+            autoComplete={
+              isRegisterMode
+                ? "new-password"
+                : "current-password"
             }
             required
           />
+        </label>
+
+        {isRegisterMode && (
+          <label className="auth-field auth-field--password">
+            <span className="visually-hidden">
+              Подтверждение пароля
+            </span>
+
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) =>
+                setConfirmPassword(
+                  event.target.value
+                )
+              }
+              minLength={6}
+              maxLength={100}
+              placeholder="Повторите пароль"
+              autoComplete="new-password"
+              required
+            />
+          </label>
         )}
 
         {error && (
-          <p className="auth-error">{error}</p>
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
         )}
 
         <button
@@ -144,22 +180,36 @@ function AuthPage({ onLogin }) {
           type="submit"
           disabled={isLoading}
         >
-          {isLoading
-            ? "Загрузка..."
-            : mode === "login"
-              ? "Войти"
-              : "Создать аккаунт"}
+          <span>
+            {isLoading
+              ? "Загрузка..."
+              : isRegisterMode
+                ? "Зарегистрироваться"
+                : "Войти"}
+          </span>
         </button>
 
-        <button
-          className="auth-switch"
-          type="button"
-          onClick={switchMode}
-        >
-          {mode === "login"
-            ? "Нет аккаунта? Регистрация"
-            : "Уже есть аккаунт? Войти"}
-        </button>
+        <div className="auth-switch-row">
+          <span>
+            {isRegisterMode
+              ? "Уже есть аккаунт?"
+              : "Нет аккаунта?"}
+          </span>
+
+          <button
+            className="auth-switch"
+            type="button"
+            onClick={switchMode}
+          >
+            {isRegisterMode
+              ? "Войти"
+              : "Регистрация"}
+          </button>
+        </div>
+
+        <p className="auth-security-note">
+          Сквозное шифрование включено
+        </p>
       </form>
     </main>
   );

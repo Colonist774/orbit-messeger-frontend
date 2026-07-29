@@ -1,8 +1,7 @@
-// отвечает за левую боковую панель, отображение списка чатов, поиск пользователей, 
-// создание новых чатов и выход из аккаунта.
-
+// Левая панель: профиль, поиск пользователей и список чатов.
 
 import { useState } from "react";
+
 
 function LeftSidebar({
   chats,
@@ -17,6 +16,7 @@ function LeftSidebar({
   const [foundUsers, setFoundUsers] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+
 
   async function handleSearch(event) {
     const value = event.target.value;
@@ -35,7 +35,6 @@ function LeftSidebar({
       setIsSearching(true);
 
       const users = await onSearchUsers(preparedValue);
-
       setFoundUsers(users);
     } catch (error) {
       setSearchError(error.message);
@@ -43,6 +42,7 @@ function LeftSidebar({
       setIsSearching(false);
     }
   }
+
 
   async function handleCreateChat(userId) {
     try {
@@ -57,16 +57,24 @@ function LeftSidebar({
     }
   }
 
+
+  const isSearchOpen = searchText.trim() !== "";
+
+
   return (
     <aside className="sidebar">
       <header className="sidebar-user">
-        <div className="avatar">
+        <div className="avatar" aria-hidden="true">
           {currentUser.username[0].toUpperCase()}
         </div>
 
         <div className="sidebar-user__info">
           <h2>{currentUser.username}</h2>
-          <span>Online</span>
+
+          <span className="presence-status">
+            <i aria-hidden="true" />
+            Online
+          </span>
         </div>
 
         <button
@@ -76,93 +84,124 @@ function LeftSidebar({
           aria-label="Выйти из аккаунта"
           title="Выйти"
         >
-          ↪
+          <span className="visually-hidden">Выйти</span>
         </button>
       </header>
 
-      <input
-        className="search-input"
-        type="search"
-        value={searchText}
-        onChange={handleSearch}
-        placeholder="Поиск пользователей"
-      />
+      <label className="sidebar-search">
+        <span className="visually-hidden">
+          Поиск пользователей
+        </span>
 
-      {searchText.trim() !== "" && (
-        <div className="search-results">
-          {isSearching && (
-            <p className="search-message">
-              Поиск...
-            </p>
-          )}
+        <input
+          className="search-input"
+          type="search"
+          value={searchText}
+          onChange={handleSearch}
+          placeholder="Поиск пользователей"
+          autoComplete="off"
+          enterKeyHint="search"
+        />
+      </label>
 
-          {searchError && (
-            <p className="search-error">
-              {searchError}
-            </p>
-          )}
+      {isSearchOpen ? (
+        <section className="sidebar-section sidebar-section--search">
+          <div className="sidebar-section__heading">
+            <h3>Результаты</h3>
+          </div>
 
-          {!isSearching &&
-            !searchError &&
-            foundUsers.length === 0 && (
+          <div className="search-results">
+            {isSearching && (
               <p className="search-message">
-                Пользователи не найдены
+                Поиск...
               </p>
             )}
 
-          {foundUsers.map((user) => (
-            <button
-              className="search-user"
-              type="button"
-              key={user.id}
-              onClick={() =>
-                handleCreateChat(user.id)
-              }
-            >
-              <div className="avatar">
-                {user.username[0].toUpperCase()}
-              </div>
+            {searchError && (
+              <p className="search-error">
+                {searchError}
+              </p>
+            )}
 
-              <span>{user.username}</span>
-            </button>
-          ))}
-        </div>
-      )}
+            {!isSearching &&
+              !searchError &&
+              foundUsers.length === 0 && (
+                <p className="search-message">
+                  Пользователи не найдены
+                </p>
+              )}
 
-      {searchText.trim() === "" && (
-        <div className="chat-list">
-          {chats.length === 0 ? (
-            <p className="search-message">
-              Чатов пока нет
-            </p>
-          ) : (
-            chats.map((chat) => (
+            {foundUsers.map((user) => (
               <button
-                className={`chat-item ${
-                  selectedChatId === chat.id
-                    ? "chat-item--active"
-                    : ""
-                }`}
+                className="search-user"
                 type="button"
-                key={chat.id}
+                key={user.id}
                 onClick={() =>
-                  onSelectChat(chat.id)
+                  handleCreateChat(user.id)
                 }
               >
-                <div className="avatar">
-                  {chat.name[0].toUpperCase()}
+                <div className="avatar" aria-hidden="true">
+                  {user.username[0].toUpperCase()}
                 </div>
 
-                <div className="chat-item__content">
-                  <h3>{chat.name}</h3>
-                  <p>{chat.lastMessage}</p>
-                </div>
+                <span>{user.username}</span>
 
-                <time>{chat.time}</time>
+                <i
+                  className="search-user__arrow"
+                  aria-hidden="true"
+                />
               </button>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="sidebar-section">
+          <div className="sidebar-section__heading">
+            <h3>Чаты</h3>
+
+            <span className="sidebar-section__count">
+              {chats.length}
+            </span>
+          </div>
+
+          <div className="chat-list">
+            {chats.length === 0 ? (
+              <div className="sidebar-empty-state">
+                <span aria-hidden="true" />
+                <p>Чатов пока нет</p>
+                <small>
+                  Найдите пользователя, чтобы начать общение
+                </small>
+              </div>
+            ) : (
+              chats.map((chat) => (
+                <button
+                  className={`chat-item ${
+                    selectedChatId === chat.id
+                      ? "chat-item--active"
+                      : ""
+                  }`}
+                  type="button"
+                  key={chat.id}
+                  onClick={() =>
+                    onSelectChat(chat.id)
+                  }
+                >
+                  <div className="avatar" aria-hidden="true">
+                    {chat.name[0].toUpperCase()}
+                  </div>
+
+                  <div className="chat-item__content">
+                    <h3>{chat.name}</h3>
+                    <p>{chat.lastMessage}</p>
+                  </div>
+
+                  <time>{chat.time}</time>
+                </button>
+              ))
+            )}
+          </div>
+        </section>
       )}
     </aside>
   );

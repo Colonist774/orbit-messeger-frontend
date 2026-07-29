@@ -1,9 +1,11 @@
-// Отображает текстовое сообщение или зашифрованное вложение.
-
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import MessageImage from "./MessageImage";
 import MessageMedia from "./MessageMedia";
+
 
 function Message({
   messageId,
@@ -18,7 +20,7 @@ function Message({
   onDelete,
   attachmentAccess,
 }) {
-  const [areActionsOpen, setAreActionsOpen] =
+  const [isDeleteVisible, setIsDeleteVisible] =
     useState(false);
 
   const isImage = type === "image";
@@ -28,33 +30,45 @@ function Message({
   const isAttachment =
     isImage || isAudio || isVideo;
 
-  function handleMessagePointerUp(event) {
+
+  useEffect(() => {
+    setIsDeleteVisible(false);
+  }, [messageId]);
+
+
+  function handleMessagePointer(event) {
+    if (!canDelete) {
+      return;
+    }
+
+    const hasHover = window.matchMedia(
+      "(hover: hover) and (pointer: fine)"
+    ).matches;
+
+    if (hasHover) {
+      return;
+    }
+
     if (
-      event.pointerType !== "touch" ||
-      !canDelete
+      event.target.closest(
+        "button, a, audio, video, input"
+      )
     ) {
       return;
     }
 
-    const interactiveElement =
-      event.target.closest(
-        "button, a, audio, video, input"
-      );
-
-    if (interactiveElement) {
-      return;
-    }
-
-    setAreActionsOpen(
+    setIsDeleteVisible(
       (currentValue) => !currentValue
     );
   }
 
-  function handleDeleteClick(event) {
+
+  function handleDelete(event) {
     event.stopPropagation();
-    setAreActionsOpen(false);
+    setIsDeleteVisible(false);
     onDelete();
   }
+
 
   return (
     <article
@@ -72,11 +86,11 @@ function Message({
       } ${
         isVideo ? "message--video" : ""
       } ${
-        areActionsOpen
-          ? "message--actions-open"
+        isDeleteVisible
+          ? "message--delete-visible"
           : ""
       }`}
-      onPointerUp={handleMessagePointerUp}
+      onClick={handleMessagePointer}
     >
       {!isOwn && (
         <span className="message__author">
@@ -122,15 +136,24 @@ function Message({
           <button
             className="message__delete"
             type="button"
-            onClick={handleDeleteClick}
+            onClick={handleDelete}
             aria-label="Удалить сообщение"
             title="Удалить сообщение"
           >
-            Удалить
+            <span className="visually-hidden">
+              Удалить
+            </span>
           </button>
         )}
 
-        {isOwn && <span>✓✓</span>}
+        {isOwn && (
+          <span
+            className="message__delivery"
+            aria-label="Доставлено"
+          >
+            ✓✓
+          </span>
+        )}
 
         <time>{time}</time>
       </footer>
