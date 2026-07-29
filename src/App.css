@@ -607,13 +607,25 @@
     transform 160ms ease;
 }
 
-.message:hover .message__delete,
+.message--actions-open .message__delete,
 .message__delete:focus-visible {
-  max-width: 62px;
+  max-width: 72px;
   padding: 2px 4px;
   color: var(--orbit-danger-soft);
   opacity: 1;
+  pointer-events: auto;
   transform: translateX(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .message:hover .message__delete {
+    max-width: 72px;
+    padding: 2px 4px;
+    color: var(--orbit-danger-soft);
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
 }
 
 /* Форма отправки */
@@ -1495,11 +1507,16 @@ button {
   }
 
   .message__delete {
-    max-width: 62px;
-    min-width: 34px;
+    min-width: 0;
+    min-height: 0;
+    pointer-events: none;
+  }
+
+  .message--actions-open .message__delete {
+    min-width: 52px;
     min-height: 30px;
     padding: 3px 6px;
-    opacity: 1;
+    pointer-events: auto;
     font-size: 11px;
     transform: none;
   }

@@ -1,8 +1,9 @@
 // Отображает текстовое сообщение или зашифрованное вложение.
 
+import { useState } from "react";
+
 import MessageImage from "./MessageImage";
 import MessageMedia from "./MessageMedia";
-
 
 function Message({
   messageId,
@@ -17,12 +18,43 @@ function Message({
   onDelete,
   attachmentAccess,
 }) {
+  const [areActionsOpen, setAreActionsOpen] =
+    useState(false);
+
   const isImage = type === "image";
   const isAudio = type === "audio";
   const isVideo = type === "video";
 
   const isAttachment =
     isImage || isAudio || isVideo;
+
+  function handleMessagePointerUp(event) {
+    if (
+      event.pointerType !== "touch" ||
+      !canDelete
+    ) {
+      return;
+    }
+
+    const interactiveElement =
+      event.target.closest(
+        "button, a, audio, video, input"
+      );
+
+    if (interactiveElement) {
+      return;
+    }
+
+    setAreActionsOpen(
+      (currentValue) => !currentValue
+    );
+  }
+
+  function handleDeleteClick(event) {
+    event.stopPropagation();
+    setAreActionsOpen(false);
+    onDelete();
+  }
 
   return (
     <article
@@ -39,7 +71,12 @@ function Message({
         isAudio ? "message--audio" : ""
       } ${
         isVideo ? "message--video" : ""
+      } ${
+        areActionsOpen
+          ? "message--actions-open"
+          : ""
       }`}
+      onPointerUp={handleMessagePointerUp}
     >
       {!isOwn && (
         <span className="message__author">
@@ -85,11 +122,11 @@ function Message({
           <button
             className="message__delete"
             type="button"
-            onClick={onDelete}
+            onClick={handleDeleteClick}
             aria-label="Удалить сообщение"
             title="Удалить сообщение"
           >
-            Delete
+            Удалить
           </button>
         )}
 
@@ -100,6 +137,5 @@ function Message({
     </article>
   );
 }
-
 
 export default Message;

@@ -1,7 +1,6 @@
-// отвечает за страницу авторизации и регистрации пользователя, переключение между режимами входа 
-// и регистрации, обработку ошибок и состояния загрузки, а также сохранение токена доступа в 
-// локальном хранилище после успешного входа.
-
+// Отвечает за страницу авторизации и регистрации пользователя,
+// переключение между режимами входа и регистрации, обработку ошибок,
+// состояние загрузки и сохранение токена после успешного входа.
 
 import { useState } from "react";
 
@@ -14,13 +13,23 @@ function AuthPage({ onLogin }) {
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] =
+    useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(event) {
     event.preventDefault();
-
     setError("");
+
+    if (
+      mode === "register" &&
+      password !== passwordConfirmation
+    ) {
+      setError("Пароли не совпадают");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -42,8 +51,8 @@ function AuthPage({ onLogin }) {
         tokenData.access_token,
         password
       );
-    } catch (error) {
-      setError(error.message);
+    } catch (submitError) {
+      setError(submitError.message);
     } finally {
       setIsLoading(false);
     }
@@ -51,6 +60,7 @@ function AuthPage({ onLogin }) {
 
   function switchMode() {
     setError("");
+    setPasswordConfirmation("");
 
     setMode((currentMode) =>
       currentMode === "login"
@@ -58,6 +68,8 @@ function AuthPage({ onLogin }) {
         : "login"
     );
   }
+
+  const isRegisterMode = mode === "register";
 
   return (
     <main className="auth-page">
@@ -81,6 +93,7 @@ function AuthPage({ onLogin }) {
           minLength={3}
           maxLength={20}
           placeholder="Имя пользователя"
+          autoComplete="username"
           required
         />
 
@@ -93,8 +106,34 @@ function AuthPage({ onLogin }) {
           minLength={6}
           maxLength={100}
           placeholder="Пароль"
+          autoComplete={
+            isRegisterMode
+              ? "new-password"
+              : "current-password"
+          }
           required
         />
+
+        {isRegisterMode && (
+          <input
+            type="password"
+            value={passwordConfirmation}
+            onChange={(event) =>
+              setPasswordConfirmation(
+                event.target.value
+              )
+            }
+            minLength={6}
+            maxLength={100}
+            placeholder="Повторите пароль"
+            autoComplete="new-password"
+            aria-invalid={
+              passwordConfirmation !== "" &&
+              password !== passwordConfirmation
+            }
+            required
+          />
+        )}
 
         {error && (
           <p className="auth-error">{error}</p>
@@ -102,7 +141,7 @@ function AuthPage({ onLogin }) {
 
         <button
           className="auth-submit"
-          type="submit" //работает, так как функция handleSubmit прописана в обработчике формы
+          type="submit"
           disabled={isLoading}
         >
           {isLoading
