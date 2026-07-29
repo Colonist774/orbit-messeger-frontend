@@ -9,6 +9,13 @@ import {
 
 import Message from "./Message";
 
+import {
+  AttachmentIcon,
+  MicrophoneIcon,
+  StopRecordingIcon,
+  SendIcon,
+} from "./ComposerIcons";
+
 
 const ALLOWED_ATTACHMENT_TYPES = {
   image: new Set([
@@ -1009,7 +1016,7 @@ function ChatWindow({
             title="Добавить изображение, аудио или видео"
             disabled={isSending || isRecording}
           >
-            ＋
+            <AttachmentIcon />
           </button>
 
           <input
@@ -1059,7 +1066,11 @@ function ChatWindow({
               Boolean(selectedAttachment)
             }
           >
-            {isRecording ? "■" : "🎙"}
+            {isRecording ? (
+              <StopRecordingIcon />
+            ) : (
+              <MicrophoneIcon />
+            )}
           </button>
 
           <button
@@ -1068,7 +1079,7 @@ function ChatWindow({
             aria-label="Отправить сообщение"
             disabled={isSending || isRecording}
           >
-            ➤
+            <SendIcon />
           </button>
         </form>
       </div>

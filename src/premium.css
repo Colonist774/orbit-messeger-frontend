@@ -1252,3 +1252,59 @@ body {
 .send-button::before {
   transform: translateX(1px);
 }
+
+/* ---------- Надёжное центрирование SVG в composer ---------- */
+/*
+ * Реальные SVG заменяют прежние текстовые символы и маски ::before.
+ * Поэтому положение иконок больше не зависит от line-height и метрик шрифта.
+ */
+.attachment-button::before,
+.voice-message-button::before,
+.send-button::before {
+  display: none !important;
+  content: none !important;
+}
+
+.attachment-button,
+.voice-message-button,
+.send-button {
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+.attachment-button,
+.voice-message-button {
+  color: var(--orbit-text-soft) !important;
+}
+
+.send-button {
+  color: #ffffff !important;
+}
+
+.composer-button__icon {
+  grid-area: 1 / 1;
+  width: 19px;
+  height: 19px;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  flex: none;
+}
+
+.composer-button__icon--send {
+  width: 18px;
+  height: 18px;
+  transform: translateX(1px);
+}
+
+.composer-button__icon--stop {
+  width: 14px;
+  height: 14px;
+}
+
+.attachment-button:hover .composer-button__icon,
+.voice-message-button:hover .composer-button__icon {
+  color: #c2bdff;
+}
