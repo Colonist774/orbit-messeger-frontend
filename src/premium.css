@@ -1228,3 +1228,27 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Центрирование иконок в форме отправки */
+
+.attachment-button,
+.voice-message-button,
+.send-button {
+  display: grid;
+  place-items: center;
+  font-size: 0;
+  line-height: 0;
+}
+
+.attachment-button::before,
+.voice-message-button::before,
+.send-button::before {
+  grid-area: 1 / 1;
+  display: block;
+  margin: auto;
+  flex-shrink: 0;
+}
+
+.send-button::before {
+  transform: translateX(1px);
+}
