@@ -1531,7 +1531,7 @@ button {
   }
 
   .message-image {
-    max-height: 360px;
+    max-height: none;
   }
 
   .message-form input[type="text"] {
