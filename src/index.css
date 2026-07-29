@@ -1,3 +1,51 @@
+:root {
+  color-scheme: dark;
+
+  --orbit-bg: #08080b;
+  --orbit-bg-deep: #050507;
+  --orbit-surface: #0e0e13;
+  --orbit-surface-raised: #111117;
+  --orbit-surface-soft: #17171e;
+  --orbit-surface-hover: #191922;
+  --orbit-surface-active: #20202a;
+
+  --orbit-border: #292933;
+  --orbit-border-soft: #24242d;
+  --orbit-border-strong: #2a2a34;
+
+  --orbit-text: #f4f4f5;
+  --orbit-text-soft: #aaaab4;
+  --orbit-text-muted: #9999a5;
+  --orbit-text-faint: #858593;
+  --orbit-text-dim: #777784;
+
+  --orbit-accent: #655cc5;
+  --orbit-accent-hover: #756ce0;
+  --orbit-accent-border: #7168c9;
+  --orbit-accent-soft: #9b93ed;
+  --orbit-accent-deep: #393467;
+  --orbit-accent-outline: #514a9c;
+
+  --orbit-danger: #ff7b7b;
+  --orbit-danger-soft: #ffb4b4;
+  --orbit-danger-strong: #d93b4b;
+
+  --orbit-radius-sm: 10px;
+  --orbit-radius-md: 14px;
+  --orbit-radius-lg: 18px;
+  --orbit-radius-xl: 24px;
+
+  --orbit-shadow-soft:
+    0 10px 30px rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.025) inset;
+  --orbit-shadow-panel:
+    0 24px 70px rgba(0, 0, 0, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.035) inset;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -13,11 +61,12 @@ body,
 }
 
 html {
-  background: #08080b;
+  background: var(--orbit-bg);
 }
 
 body {
   overflow: hidden;
+  color: var(--orbit-text);
   font-family:
     Inter,
     system-ui,
@@ -25,11 +74,58 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  background: #08080b;
+  background: var(--orbit-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
 }
 
 input,
 button {
   font: inherit;
+}
+
+button,
+input,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--orbit-accent-border);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: #ffffff;
+  background: rgba(101, 92, 197, 0.58);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #393943 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #393943;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #4a4a56;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
